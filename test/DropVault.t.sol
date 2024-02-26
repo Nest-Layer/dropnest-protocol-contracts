@@ -25,6 +25,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     uint256 STARTING_AMOUNT = 100 ether;
 
     uint256 internal constant INITIAL_DEPOSIT_AMOUNT = 1000;
+    uint256 internal constant MIN_DEPOSIT_AMOUNT = 0.01 ether;
 
     address public OWNER = makeAddr(("owner"));
     address public USER1 = makeAddr(("user1"));
@@ -50,17 +51,9 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
         _;
     }
 
-    modifier fundWithAirdrop(uint256 airdropAmount) {
-        vm.startPrank(OWNER);
-        airdropTokenMock.mint(address(dropVault), airdropAmount);
-        vm.stopPrank();
-        _;
-    }
 
     modifier openClaim() {
-        vm.startPrank(OWNER);
-        dropVault.setAirdropTokenAddressAndOpenClaim(address(airdropTokenMock));
-        vm.stopPrank();
+        _openClaim();
         _;
     }
 
@@ -101,23 +94,23 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     //////////////////////////////////////////
 
     function testUnableToDepositBeforeOpeningVault(uint256 depositAmount) public {
-        vm.assume(depositAmount > 1 && depositAmount < USER1.balance);
+        vm.assume(depositAmount > MIN_DEPOSIT_AMOUNT && depositAmount < USER1.balance);
         vm.startPrank(USER1);
         vm.expectRevert(abi.encodeWithSelector(EnforcedPause.selector));
         dropVault.depositETH{value: depositAmount}(USER1);
         vm.stopPrank();
     }
 
-    function testShouldFailOnZeroAmount() public {
-        uint256 depositAmount = 0;
+    function testShouldFailOnDepositLessThanMinimum(uint256 depositAmount) public {
+        vm.assume(depositAmount < MIN_DEPOSIT_AMOUNT);
         vm.startPrank(USER1);
-        vm.expectRevert(abi.encodeWithSelector(DropVault_ZeroDeposit.selector));
+        vm.expectRevert(abi.encodeWithSelector(DropVault_DepositLessThanMinimumAmount.selector));
         dropVault.depositETH{value: depositAmount}(USER1);
         vm.stopPrank();
     }
 
     function testDepositETH(uint256 depositAmount) public openVault {
-        vm.assume(depositAmount > 1 && depositAmount < USER1.balance);
+        depositAmount = bound(depositAmount, MIN_DEPOSIT_AMOUNT, USER1.balance);
         vm.startPrank(USER1);
         vm.expectEmit(true, true, true, true);
         emit ETHDeposited(USER1, USER1, depositAmount);
@@ -162,35 +155,51 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     ///////////////////////////////////////////////////////
     //          claimAirdrop                             //
     ///////////////////////////////////////////////////////
-    function testClaimAirdrop(uint256 userAmount) public openVault fundWithAirdrop(1000) openClaim {
-        vm.assume(userAmount > 1 && userAmount < USER1.balance);
-        vm.startPrank(USER1);
+    function testClaimAirdrop(uint256 airdropAmount, uint256 userAmount) public openVault {
+        userAmount = bound(userAmount, MIN_DEPOSIT_AMOUNT, USER1.balance);
+        airdropAmount = bound(airdropAmount, userAmount, userAmount * userAmount);
+
+        vm.prank(USER1);
         dropVault.depositETH{value: userAmount}(USER1);
-        (uint256 claimableEthAmount,uint256 claimableTokenAmount) = dropVault.getClaimableAmount(USER1);
+
+        _fundWithAirdrop(airdropAmount);
+        _openClaim();
+
+        (uint256 claimableEthAmount, uint256 claimableTokenAmount) = dropVault.getClaimableAmount(USER1);
+
+        vm.prank(USER1);
         vm.expectEmit(true, true, true, true);
         emit AirdropClaimed(USER1, claimableEthAmount, claimableTokenAmount);
         dropVault.claimAirdropAndWithdrawETH();
-        vm.stopPrank();
+
         assertEq(airdropTokenMock.balanceOf(USER1), claimableTokenAmount);
     }
 
-    function testClaimWithMultipleUsersAirdrop(uint256 user1Amount, uint256 user2Amount, uint256 fundAirdrop) public openVault fundWithAirdrop(fundAirdrop) openClaim {
-        vm.assume(user1Amount > 0 && user2Amount > 0 && user1Amount < USER1.balance && user2Amount < USER2.balance);
-        vm.assume(fundAirdrop > 0 && fundAirdrop < dropVault.totalShares() * user1Amount && fundAirdrop < dropVault.totalShares() * user2Amount);
+    function testClaimWithMultipleUsersAirdrop(uint256 user1Amount, uint256 user2Amount, uint256 fundAirdrop) public openVault openClaim {
+        user1Amount = bound(user1Amount, MIN_DEPOSIT_AMOUNT, USER1.balance);
+        user2Amount = bound(user2Amount, MIN_DEPOSIT_AMOUNT, USER2.balance);
+        fundAirdrop = bound(fundAirdrop, 0, user1Amount * user2Amount);
+
         vm.prank(USER1);
         dropVault.depositETH{value: user1Amount}(USER1);
+
         vm.prank(USER2);
         dropVault.depositETH{value: user2Amount}(USER2);
-        vm.startPrank(USER1);
-        (uint256 claimableEthAmount,uint256 claimableTokenAmount) = dropVault.getClaimableAmount(USER1);
+
+        _fundWithAirdrop(fundAirdrop);
+
+        (uint256 claimableEthAmount, uint256 claimableTokenAmount) = dropVault.getClaimableAmount(USER1);
+
+        vm.prank(USER1);
         vm.expectEmit(true, true, true, true);
         emit AirdropClaimed(USER1, claimableEthAmount, claimableTokenAmount);
         dropVault.claimAirdropAndWithdrawETH();
-        vm.stopPrank();
+
         assertEq(airdropTokenMock.balanceOf(USER1), claimableTokenAmount);
     }
 
-    function testClaimAirdropShouldFailIfNoSharesToClaim(uint256 fundAirdrop) public openVault fundWithAirdrop(fundAirdrop) openClaim {
+    function testClaimAirdropShouldFailIfNoSharesToClaim(uint256 fundAirdrop) public openVault openClaim {
+        _fundWithAirdrop(fundAirdrop);
         vm.startPrank(USER1);
         vm.expectRevert(abi.encodeWithSelector(DropVault_NoSharesToClaim.selector));
         dropVault.claimAirdropAndWithdrawETH();
@@ -201,7 +210,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     //          fundFarmer                               //
     ///////////////////////////////////////////////////////
     function testFundFarmer(uint256 depositAmount) public openVault {
-        vm.assume(depositAmount > 1 && depositAmount < USER1.balance);
+        vm.assume(depositAmount > MIN_DEPOSIT_AMOUNT && depositAmount < USER1.balance);
         vm.startPrank(USER1);
         dropVault.depositETH{value: depositAmount}(USER1);
         uint256 totalBalance = address(dropVault).balance;
@@ -231,7 +240,8 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     ///////////////////////////////////////////////////////
     //          airdropTotalBalance                      //
     ///////////////////////////////////////////////////////
-    function testAirdropTotalBalance(uint256 fundAirdrop) public openVault fundWithAirdrop(fundAirdrop) openClaim {
+    function testAirdropTotalBalance(uint256 fundAirdrop) public openVault openClaim {
+        _fundWithAirdrop(fundAirdrop);
         uint256 totalBalance = dropVault.airdropTotalBalance();
         assertEq(totalBalance, fundAirdrop);
     }
@@ -244,24 +254,35 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     //          updateFarmerAddress                      //
     ///////////////////////////////////////////////////////
     function testUpdateFarmerAddress(address newFarmerAddress) public openVault {
-        vm.startPrank(OWNER);
+        vm.assume(newFarmerAddress != address(0) && newFarmerAddress != FARMER_ADDRESS);
+        vm.prank(OWNER);
         dropVault.updateFarmerAddress(newFarmerAddress);
-        vm.stopPrank();
         assertEq(dropVault.farmerAddress(), newFarmerAddress);
     }
 
     function testUpdateFarmerAddressShouldFailIfNotOwner(address newFarmerAddress) public openVault {
-        vm.startPrank(USER1);
+        vm.prank(USER1);
         vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
         dropVault.updateFarmerAddress(newFarmerAddress);
-        vm.stopPrank();
     }
 
     function testUpdateFarmerAddressShouldFailIfNewFarmerAddressIsZero() public openVault {
         address newFarmerAddress = address(0);
-        vm.startPrank(OWNER);
+        vm.prank(OWNER);
         vm.expectRevert(abi.encodeWithSelector(DropVault_ZeroAddressProvided.selector));
         dropVault.updateFarmerAddress(newFarmerAddress);
+    }
+
+
+    function _fundWithAirdrop(uint256 airdropAmount) internal {
+        vm.startPrank(OWNER);
+        airdropTokenMock.mint(address(dropVault), airdropAmount);
+        vm.stopPrank();
+    }
+
+    function _openClaim() internal {
+        vm.startPrank(OWNER);
+        dropVault.setAirdropTokenAddressAndOpenClaim(address(airdropTokenMock));
         vm.stopPrank();
     }
 

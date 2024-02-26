@@ -13,7 +13,7 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
     ///////////////////
     // Errors        //
     ///////////////////
-    error DropVault_ZeroDeposit();
+    error DropVault_DepositLessThanMinimumAmount();
     error DropVault_LessThanInitialDepositAmount();
     error DropVault_VaultAlreadyOpened();
     error DropVault_ZeroSharesIssued();
@@ -25,7 +25,6 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
     error DropVault_StatusAlreadySet(bool status);
     error DropVault_ClaimNotOpen();
     error DropVault_NoBalanceToFund();
-
     /////////////////////
     // State Variables //
     /////////////////////
@@ -42,7 +41,7 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
 
     /// @notice Initial deposit amount required to open the vault
     uint256 internal constant INITIAL_DEPOSIT_AMOUNT = 1000;
-
+    uint256 internal constant MINT_DEPOSIT_AMOUNT = 0.01 ether;
     /// @notice Mapping of addresses to their share amounts
     mapping(address => uint256) public shares;
 
@@ -127,17 +126,16 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
 
     /// @notice Allows a user to claim their airdrop and withdraw their ETH
     function claimAirdropAndWithdrawETH() external whenNotPaused nonReentrant whenClaimable {
-        if (shares[msg.sender] == 0) {
+        address user = msg.sender;
+        uint256 userShares = shares[user];
+        if (userShares == 0) {
             revert DropVault_NoSharesToClaim();
         }
-
-        uint256 _shares = shares[msg.sender];
-        shares[msg.sender] = 0;
+        shares[user] = 0;
         uint256 _totalShares = totalShares;
-        totalShares -= _shares;
-
-        uint256 ethAmount = _withdrawETH(msg.sender, _totalShares, _shares);
-        uint256 tokenAmount = _claimAirdrop(msg.sender, _totalShares, _shares);
+        totalShares -= userShares;
+        uint256 ethAmount = _withdrawETH(msg.sender, _totalShares, userShares);
+        uint256 tokenAmount = _claimAirdrop(msg.sender, _totalShares, userShares);
         emit AirdropClaimed(msg.sender, ethAmount, tokenAmount);
     }
 
@@ -171,8 +169,8 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
     /// @notice Allows a user to deposit ETH into the contract
     /// @param receiver The address that will receive the shares
     function depositETH(address receiver) public payable {
-        if (msg.value == 0) {
-            revert DropVault_ZeroDeposit();
+        if (msg.value < MINT_DEPOSIT_AMOUNT) {
+            revert DropVault_DepositLessThanMinimumAmount();
         }
         _recordDepositETH(receiver, msg.value);
     }
@@ -274,7 +272,6 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
 
         // Get the number of shares for the user
         uint256 userShares = shares[user];
-
         // Calculate the amount of tokens and ETH the user can claim based on their shares
         uint256 claimableTokenAmount = (airdropTotalBalance() * userShares) / totalShares;
         uint256 claimableEthAmount = (address(this).balance * userShares) / totalShares;

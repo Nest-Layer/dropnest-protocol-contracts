@@ -3,7 +3,7 @@
 pragma solidity ^0.8.23;
 
 contract Errors {
-    error DropVault_ZeroDeposit();
+    error DropVault_DepositLessThanMinimumAmount();
     error DropVault_LessThanInitialDepositAmount();
     error DropVault_VaultAlreadyOpened();
     error DropVault_ZeroSharesIssued();
