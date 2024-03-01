@@ -6,7 +6,6 @@ contract Errors {
     error DropVault_DepositLessThanMinimumAmount();
     error DropVault_LessThanInitialDepositAmount();
     error DropVault_VaultAlreadyOpened();
-    error DropVault_ZeroSharesIssued();
     error DropVault_SharesNotInitiated();
     error DropVault_NoSharesToClaim();
     error DropVault_AirdropTokenClaimFailed();
@@ -14,7 +13,6 @@ contract Errors {
     error DropVault_ZeroAddressProvided();
     error DropVault_StatusAlreadySet(bool status);
     error DropVault_ClaimNotOpen();
-    error DropVault_NoBalanceToFund();
 
     error EnforcedPause();
     error OwnableUnauthorizedAccount(address account);

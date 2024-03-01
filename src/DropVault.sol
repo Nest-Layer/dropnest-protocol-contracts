@@ -2,21 +2,25 @@
 pragma solidity ^0.8.23;
 
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
+import {console} from "forge-std/Test.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title DropVault
 /// @notice This contract is used for managing airdrops and claims.
 contract DropVault is Ownable, Pausable, ReentrancyGuard {
+    using Math for uint256;
+
     ///////////////////
     // Errors        //
     ///////////////////
     error DropVault_DepositLessThanMinimumAmount();
     error DropVault_LessThanInitialDepositAmount();
     error DropVault_VaultAlreadyOpened();
-    error DropVault_ZeroSharesIssued();
     error DropVault_SharesNotInitiated();
     error DropVault_NoSharesToClaim();
     error DropVault_AirdropTokenClaimFailed();
@@ -24,7 +28,6 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
     error DropVault_ZeroAddressProvided();
     error DropVault_StatusAlreadySet(bool status);
     error DropVault_ClaimNotOpen();
-    error DropVault_NoBalanceToFund();
     /////////////////////
     // State Variables //
     /////////////////////
@@ -144,16 +147,6 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
         depositETH(msg.sender);
     }
 
-    /// @notice Funds the farmer with the contract's balance
-    function fundFarmer() external onlyOwner {
-        uint256 fundAmount = address(this).balance;
-        if (fundAmount == 0) {
-            revert DropVault_NoBalanceToFund();
-        }
-        payable(farmerAddress).transfer(fundAmount);
-        emit FarmerAddressSet(farmerAddress);
-    }
-
     /// @notice Updates the farmer's address
     /// @param _farmerAddress The new farmer's address
     function updateFarmerAddress(address _farmerAddress) external onlyOwner {
@@ -168,11 +161,14 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
     ///////////////////////
     /// @notice Allows a user to deposit ETH into the contract
     /// @param receiver The address that will receive the shares
-    function depositETH(address receiver) public payable {
-        if (msg.value < MINT_DEPOSIT_AMOUNT) {
+    function depositETH(address receiver) public payable whenNotPaused {
+        uint256 depositAmount = msg.value;
+        if (depositAmount < MINT_DEPOSIT_AMOUNT) {
             revert DropVault_DepositLessThanMinimumAmount();
         }
-        _recordDepositETH(receiver, msg.value);
+        _mintShares(receiver, depositAmount);
+        emit ETHDeposited(msg.sender, receiver, depositAmount);
+        payable(farmerAddress).transfer(depositAmount);
     }
 
     /// @notice Sets the claim status
@@ -208,7 +204,7 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
     /// @return The amount of tokens withdrawn by the user.
     function _claimAirdrop(address user, uint256 _totalShares, uint256 _shares) internal returns (uint256) {
         uint256 totalAirdropBalance = airdropTotalBalance();
-        uint256 withdrawAmount = (totalAirdropBalance * _shares) / _totalShares;
+        uint256 withdrawAmount = _shares.mulDiv(totalAirdropBalance, _totalShares, Math.Rounding.Floor);
         bool success = IERC20(airdropTokenAddress).transfer(user, withdrawAmount);
         if (!success) {
             revert DropVault_AirdropTokenClaimFailed();
@@ -238,14 +234,6 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
         totalShares += _shares;
     }
 
-    /// @notice Records a deposit of ETH and mints shares for the receiver.
-    /// @param receiver The address that will receive the shares.
-    /// @param depositAmount The amount of ETH deposited.
-    function _recordDepositETH(address receiver, uint256 depositAmount) internal whenNotPaused {
-        _mintShares(receiver, depositAmount);
-        emit ETHDeposited(msg.sender, receiver, depositAmount);
-    }
-
     //////////////////////////////////////////////////////
     // Private & Internal View & Pure Functions         //
     //////////////////////////////////////////////////////
@@ -273,7 +261,7 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
         // Get the number of shares for the user
         uint256 userShares = shares[user];
         // Calculate the amount of tokens and ETH the user can claim based on their shares
-        uint256 claimableTokenAmount = (airdropTotalBalance() * userShares) / totalShares;
+        uint256 claimableTokenAmount = userShares.mulDiv(airdropTotalBalance(), totalShares, Math.Rounding.Floor);
         uint256 claimableEthAmount = (address(this).balance * userShares) / totalShares;
 
         // Return the claimable amounts
@@ -287,5 +275,11 @@ contract DropVault is Ownable, Pausable, ReentrancyGuard {
             return 0;
         }
         return IERC20(airdropTokenAddress).balanceOf(address(this));
+    }
+
+    /// @notice Returns the protocol name
+    /// @return The name of the protocol
+    function getProtocolName() public view returns (string memory) {
+        return protocolName;
     }
 }

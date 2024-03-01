@@ -31,7 +31,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     address public USER1 = makeAddr(("user1"));
     address public USER2 = makeAddr(("user2"));
 
-    address public FARMER_ADDRESS = makeAddr(("farmer"));
+    address public FARMER = makeAddr(("farmer"));
 
     function setUp() public {
         vm.deal(OWNER, STARTING_AMOUNT);
@@ -40,7 +40,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
 
         deployer = new DeployDropVaultContract();
         ERC20Deployer = new DeployERC20MockContract();
-        dropVault = deployer.deployContract(PROTOCOL_NAME, OWNER, FARMER_ADDRESS);
+        dropVault = deployer.deployContract(PROTOCOL_NAME, OWNER, FARMER);
         airdropTokenMock = ERC20Deployer.deployERC20Mock(OWNER);
     }
 
@@ -101,7 +101,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
         vm.stopPrank();
     }
 
-    function testShouldFailOnDepositLessThanMinimum(uint256 depositAmount) public {
+    function testShouldFailOnDepositLessThanMinimum(uint256 depositAmount) public openVault {
         vm.assume(depositAmount < MIN_DEPOSIT_AMOUNT);
         vm.startPrank(USER1);
         vm.expectRevert(abi.encodeWithSelector(DropVault_DepositLessThanMinimumAmount.selector));
@@ -117,6 +117,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
         dropVault.depositETH{value: depositAmount}(USER1);
         vm.stopPrank();
         assertEq(dropVault.balanceOf(USER1), depositAmount);
+        assertEq(FARMER.balance, depositAmount);
     }
 
     ///////////////////////////////////////////////////////
@@ -155,7 +156,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     ///////////////////////////////////////////////////////
     //          claimAirdrop                             //
     ///////////////////////////////////////////////////////
-    function testClaimAirdrop(uint256 airdropAmount, uint256 userAmount) public openVault {
+    function testClaimAirdropShouldSucceed(uint256 airdropAmount, uint256 userAmount) public openVault {
         userAmount = bound(userAmount, MIN_DEPOSIT_AMOUNT, USER1.balance);
         airdropAmount = bound(airdropAmount, userAmount, userAmount * userAmount);
 
@@ -196,6 +197,16 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
         dropVault.claimAirdropAndWithdrawETH();
 
         assertEq(airdropTokenMock.balanceOf(USER1), claimableTokenAmount);
+
+        vm.prank(USER2);
+        dropVault.claimAirdropAndWithdrawETH();
+
+        vm.prank(OWNER);
+        dropVault.claimAirdropAndWithdrawETH();
+
+        assertEq(fundAirdrop, airdropTokenMock.balanceOf(USER1) + airdropTokenMock.balanceOf(USER2) + airdropTokenMock.balanceOf(OWNER));
+
+
     }
 
     function testClaimAirdropShouldFailIfNoSharesToClaim(uint256 fundAirdrop) public openVault openClaim {
@@ -203,37 +214,6 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
         vm.startPrank(USER1);
         vm.expectRevert(abi.encodeWithSelector(DropVault_NoSharesToClaim.selector));
         dropVault.claimAirdropAndWithdrawETH();
-        vm.stopPrank();
-    }
-
-    ///////////////////////////////////////////////////////
-    //          fundFarmer                               //
-    ///////////////////////////////////////////////////////
-    function testFundFarmer(uint256 depositAmount) public openVault {
-        vm.assume(depositAmount > MIN_DEPOSIT_AMOUNT && depositAmount < USER1.balance);
-        vm.startPrank(USER1);
-        dropVault.depositETH{value: depositAmount}(USER1);
-        uint256 totalBalance = address(dropVault).balance;
-        vm.stopPrank();
-        vm.startPrank(OWNER);
-        dropVault.fundFarmer();
-        vm.stopPrank();
-        assertEq(FARMER_ADDRESS.balance, totalBalance);
-        assertEq(address(dropVault).balance, 0 ether);
-    }
-
-    function testFundFarmerShouldFailIfNotOwner() public openVault {
-        vm.startPrank(USER1);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
-        dropVault.fundFarmer();
-        vm.stopPrank();
-    }
-
-
-    function testFundFarmerShouldFailIfNoBalance() public {
-        vm.startPrank(OWNER);
-        vm.expectRevert(abi.encodeWithSelector(DropVault_NoBalanceToFund.selector));
-        dropVault.fundFarmer();
         vm.stopPrank();
     }
 
@@ -254,7 +234,7 @@ contract DropVaultTest is StdCheats, Test, Events, Errors {
     //          updateFarmerAddress                      //
     ///////////////////////////////////////////////////////
     function testUpdateFarmerAddress(address newFarmerAddress) public openVault {
-        vm.assume(newFarmerAddress != address(0) && newFarmerAddress != FARMER_ADDRESS);
+        vm.assume(newFarmerAddress != address(0) && newFarmerAddress != FARMER);
         vm.prank(OWNER);
         dropVault.updateFarmerAddress(newFarmerAddress);
         assertEq(dropVault.farmerAddress(), newFarmerAddress);
