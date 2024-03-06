@@ -15,12 +15,14 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
     DropnestVault public vault;
     DeployDropnestVaultContract public deployer;
 
+    string PROTOCOL_NAME1 = "PROTOCOL_NAME1";
+    string PROTOCOL_NAME2 = "PROTOCOL_NAME2";
 
-    string PROTOCOL_NAME = "BLAST";
+    string NON_WHITELISTED_PROTOCOL = "NON_WHILTELISTED_PROTOCOL";
 
     uint256 STARTING_AMOUNT = 100 ether;
 
-    uint256 internal constant INITIAL_DEPOSIT_AMOUNT = 1000;
+    uint256 internal constant BELOW_MINIMUM_DEPOSIT = 0.001 ether;
     uint256 internal constant MIN_DEPOSIT_AMOUNT = 0.01 ether;
 
     address public OWNER = makeAddr(("owner"));
@@ -40,47 +42,79 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
         address[] memory addresses = new address[](1);
         addresses[0] = FARMER1;
         string [] memory protocols = new string[](1);
-        protocols[0] = PROTOCOL_NAME;
+        protocols[0] = PROTOCOL_NAME1;
         vault = deployer.deployContract(OWNER, protocols, addresses);
     }
 
-
-    function testInitialWhitelist() public {
-        assertEq(vault.whitelist(PROTOCOL_NAME), FARMER1);
+    function testInitialWhitelistIsSetCorrectly() public {
+        assertEq(vault.whitelist(PROTOCOL_NAME1), FARMER1);
     }
 
-    function testSetWhitelist() public {
+    function testSetWhitelistUpdatesWhitelist() public {
         vm.prank(OWNER);
-        vault.setWhitelist("NewProtocol", FARMER2);
-        assertEq(vault.whitelist("NewProtocol"), FARMER2);
+        vault.setWhitelist(PROTOCOL_NAME2, FARMER2);
+        assertEq(vault.whitelist(PROTOCOL_NAME2), FARMER2);
     }
 
-    function testStake() public {
-        vault.stake{value: 1 ether}(PROTOCOL_NAME);
-        assertEq(FARMER1.balance, 1 ether);
+    function testStakeTransfersFundsToFarmer(uint256 depositAmount) public {
+        depositAmount = bound(depositAmount, MIN_DEPOSIT_AMOUNT, STARTING_AMOUNT);
+        vm.prank(USER1);
+        vm.expectEmit(true, true, true, true);
+        emit Deposited(PROTOCOL_NAME1, USER1, FARMER1, depositAmount);
+        vault.stake{value: depositAmount}(PROTOCOL_NAME1);
+        assertEq(FARMER1.balance, depositAmount);
+    }
+
+    function testStakeFailsIfUserHasInsufficientBalance() public {
+        uint256 depositAmount = USER1.balance + 1 ether;
+
+        vm.prank(USER1);
+        vm.expectRevert();
+        vault.stake{value: depositAmount}(PROTOCOL_NAME1);
     }
 
     function testFailStakeLessThanMinimum() public {
-        vault.stake{value: 0.001 ether}("TestProtocol");
+        vm.prank(USER1);
+        vault.stake{value: BELOW_MINIMUM_DEPOSIT}(PROTOCOL_NAME1);
+        vm.expectRevert(abi.encodeWithSelector(DropnestVault_DepositLessThanMinimumAmount.selector));
     }
 
-    function testFailStakeToNonWhitelistedProtocol() public {
-        vault.stake{value: 1 ether}("NonWhitelistedProtocol");
+    function testStakeFailsWhenProtocolIsNotWhitelisted(uint256 depositAmount) public {
+        depositAmount = bound(depositAmount, MIN_DEPOSIT_AMOUNT, STARTING_AMOUNT);
+        uint256 initialUserBalance = USER1.balance;
+
+        vm.prank(USER1);
+        vm.expectRevert(abi.encodeWithSelector(DropnestVault_ProtocolIsNotWhitelisted.selector));
+        vault.stake{value: depositAmount}(NON_WHITELISTED_PROTOCOL);
+
+        assertEq(USER1.balance, initialUserBalance);
     }
 
-    function testPauseAndUnpause() public {
-        vm.startPrank(OWNER);
+
+    function testStakeFailsWhenContractIsPaused(uint256 depositAmount) public {
+        depositAmount = bound(depositAmount, BELOW_MINIMUM_DEPOSIT, STARTING_AMOUNT);
+
+        vm.prank(OWNER);
         vault.pause();
         assertTrue(vault.paused());
+
+        vm.prank(USER1);
+        vm.expectRevert();
+        vault.stake{value: depositAmount}(PROTOCOL_NAME1);
+
+        vm.prank(OWNER);
         vault.unpause();
         assertFalse(vault.paused());
-        vm.stopPrank();
     }
 
-    function testFailSetWhitelistNotOwner() public {
-        vm.prank(address(0)); // Simulate a call from a non-owner
-        vault.setWhitelist("AnotherProtocol", address(3));
-        vm.expectRevert();
+    function testSetWhitelistFailsWhenCallerIsNotOwner() public {
+        address initialWhitelistedProtocol = vault.whitelist(NON_WHITELISTED_PROTOCOL);
+
+        vm.prank(USER1);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
+        vault.setWhitelist(NON_WHITELISTED_PROTOCOL, address(3));
+
+        assertEq(vault.whitelist(NON_WHITELISTED_PROTOCOL), initialWhitelistedProtocol);
     }
 
 

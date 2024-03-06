@@ -3,6 +3,10 @@
 pragma solidity ^0.8.23;
 
 contract Errors {
+    error DropnestVault_DepositLessThanMinimumAmount();
+    error DropnestVault_ZeroAddressProvided();
+    error DropnestVault_ProtocolIsNotWhitelisted();
+
     error DropVault_DepositLessThanMinimumAmount();
     error DropVault_LessThanInitialDepositAmount();
     error DropVault_VaultAlreadyOpened();

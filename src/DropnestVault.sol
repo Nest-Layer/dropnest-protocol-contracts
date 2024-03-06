@@ -28,7 +28,7 @@ contract DropnestVault is Ownable, Pausable {
     // Events        //
     ///////////////////
     /// @notice Event emitted when ETH is deposited
-    event ETHDeposited(string indexed protocol, address from, address to, uint256 amount);
+    event Deposited(string indexed protocol, address from, address to, uint256 amount);
 
     /// @notice Event emitted when new protocol added to whitelist
     event WhitelistSet(string protocol, address to);
@@ -59,7 +59,7 @@ contract DropnestVault is Ownable, Pausable {
         if (to == address(0)) {
             revert DropnestVault_ProtocolIsNotWhitelisted();
         }
-        emit ETHDeposited(protocol, msg.sender, to, depositAmount);
+        emit Deposited(protocol, msg.sender, to, depositAmount);
         payable(to).transfer(depositAmount);
     }
 
