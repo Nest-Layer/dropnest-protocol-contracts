@@ -9,7 +9,7 @@ all: clean install update build
 # Clean the repo
 clean  :; forge clean
 
-install :; forge install foundry-rs/forge-std@v1.5.3 --no-commit && forge install openzeppelin/openzeppelin-contracts --no-commit && forge install OpenZeppelin/openzeppelin-contracts-upgradeable --no-commit
+install :; forge install foundry-rs/forge-std@v1.5.3 --no-commit && forge install openzeppelin/openzeppelin-contracts --no-commit
 
 # Update Dependencies
 update:; forge update
@@ -24,24 +24,6 @@ slither :; slither .
 
 format :; forge fmt
 
+coverage :; forge coverage --report lcov && genhtml lcov.info --branch-coverage --output-dir coverage
+
 anvil :; anvil -m 'test test test test test test test test test test test junk' --steps-tracing --block-time 1
-
-NETWORK_ARGS := --rpc-url http://localhost:8545 --private-key $(DEFAULT_ANVIL_KEY) --broadcast
-
-COMMON_NETWORK_ARGS := --account lyvelyKey --sender ${DEPLOYER_PUBLIC_KEY} --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY) -vvvv
-
-ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
-	NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) $(COMMON_NETWORK_ARGS)
-endif
-
-ifeq ($(findstring --network arbitrum,$(ARGS)),--network arbitrum)
-	NETWORK_ARGS := --rpc-url $(ARBITRUM_RPC_URL) $(COMMON_NETWORK_ARGS)
-endif
-
-ifeq ($(findstring --network optimism,$(ARGS)),--network optimism)
-	NETWORK_ARGS := --rpc-url $(OPTIMISM_RPC_URL) $(COMMON_NETWORK_ARGS)
-endif
-
-
-deploy:
-	@forge script script/DeployLyvelyToken.s.sol:DeployLyvelyToken $(NETWORK_ARGS)
