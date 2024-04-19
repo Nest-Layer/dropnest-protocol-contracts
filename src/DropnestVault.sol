@@ -34,13 +34,12 @@ contract DropnestVault is Ownable, Pausable {
     event WhitelistSet(string protocol, address to);
 
     ///////////////////
-    // Modifiers
-    ///////////////////
-
-    ///////////////////
     // Functions     //
     ///////////////////
 
+    /// @notice Constructor to initialize the contract
+    /// @param protocols The list of protocols to be whitelisted
+    /// @param addresses The list of addresses corresponding to the protocols
     constructor(string[] memory protocols, address[] memory addresses) Ownable(msg.sender) {
         for (uint256 i = 0; i < protocols.length; i++) {
             _setWhitelist(protocols[i], addresses[i]);
@@ -50,6 +49,8 @@ contract DropnestVault is Ownable, Pausable {
     /////////////////////////
     // External Functions  //
     /////////////////////////
+    /// @notice Allows a user to stake their ETH
+    /// @param protocol The protocol to stake on
     function stake(string memory protocol) external payable whenNotPaused {
         uint256 depositAmount = msg.value;
         if (depositAmount < MIN_DEPOSIT_AMOUNT) {
@@ -63,15 +64,19 @@ contract DropnestVault is Ownable, Pausable {
         payable(to).transfer(depositAmount);
     }
 
-
+    /// @notice Allows the owner to set the whitelist
+    /// @param protocol The protocol to be whitelisted
+    /// @param to The address corresponding to the protocol
     function setWhitelist(string memory protocol, address to) external onlyOwner {
         _setWhitelist(protocol, to);
     }
 
+    /// @notice Allows the owner to pause the contract
     function pause() external onlyOwner {
         _pause();
     }
 
+    /// @notice Allows the owner to unpause the contract
     function unpause() external onlyOwner {
         _unpause();
     }
@@ -83,6 +88,9 @@ contract DropnestVault is Ownable, Pausable {
     //////////////////////////////////////////////////////
     // Private & Internal View & Pure Functions         //
     //////////////////////////////////////////////////////
+    /// @notice Sets the whitelist
+    /// @param protocol The protocol to be whitelisted
+    /// @param to The address corresponding to the protocol
     function _setWhitelist(string memory protocol, address to) private {
         if (to == address(0)) {
             revert DropnestVault_ZeroAddressProvided();
