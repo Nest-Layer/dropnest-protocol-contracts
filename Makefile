@@ -14,7 +14,7 @@ install :; forge install foundry-rs/forge-std@v1.5.3 --no-commit && forge instal
 # Update Dependencies
 update:; forge update
 
-build:; forge build
+build:; forge build --extra-output-files abi
 
 test :; forge test -vvv
 
