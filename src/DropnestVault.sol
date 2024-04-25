@@ -21,6 +21,8 @@ contract DropnestVault is Ownable, Pausable {
     // whitelisted protocol => the target address token transfer to
     mapping(string => address) public whitelist;
 
+    string[] public protocols;
+
     // minimum deposit amount
     uint256 internal constant MIN_DEPOSIT_AMOUNT = 0.01 ether;
 
@@ -84,7 +86,9 @@ contract DropnestVault is Ownable, Pausable {
     ///////////////////////
     // Public Functions  //
     ///////////////////////
-
+    function getProtocols() public view returns (string[] memory) {
+        return protocols;
+    }
     //////////////////////////////////////////////////////
     // Private & Internal View & Pure Functions         //
     //////////////////////////////////////////////////////
@@ -96,6 +100,7 @@ contract DropnestVault is Ownable, Pausable {
             revert DropnestVault_ZeroAddressProvided();
         }
         whitelist[protocol] = to;
+        protocols.push(protocol);
         emit WhitelistSet(protocol, to);
     }
     //////////////////////////////////////////////////////////
