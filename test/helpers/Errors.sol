@@ -3,9 +3,13 @@
 pragma solidity ^0.8.23;
 
 contract Errors {
-    error DropnestVault_DepositLessThanMinimumAmount();
+    error DropnestVault_DepositLessThanMinimumAmount(string protocol, uint256 amount);
     error DropnestVault_ZeroAddressProvided();
     error DropnestVault_ProtocolIsNotWhitelisted();
+    error DropnestVault_DepositDoesntMatchAmountProportion();
+    error DropnestVault_ArraysLengthMissmatch();
+    error DropnestVault_MaxNumberOfProtocolsReached();
+    error DropnestVault_NotEnoughBalance();
 
     error DropVault_DepositLessThanMinimumAmount();
     error DropVault_LessThanInitialDepositAmount();
