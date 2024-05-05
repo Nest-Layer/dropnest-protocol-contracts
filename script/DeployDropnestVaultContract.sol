@@ -8,6 +8,7 @@ import {DropnestVault} from "../src/DropnestVault.sol";
 contract DeployDropnestVaultContract is Script {
     function run() public {
         address ownerAddress = msg.sender;
+        address farmerAddress = msg.sender;
         string[] memory protocols = new string[](3);
         protocols[0] = "Blast";
         protocols[1] = "Bouncebit";
@@ -15,7 +16,7 @@ contract DeployDropnestVaultContract is Script {
 
         address[] memory addresses = new address[](protocols.length);
         for (uint i = 0; i < protocols.length; ++i) {
-            addresses[i] = ownerAddress;
+            addresses[i] = farmerAddress;
         }
 
         deployContract(ownerAddress, protocols, addresses);
