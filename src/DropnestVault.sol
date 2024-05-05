@@ -12,7 +12,7 @@ contract DropnestVault is Ownable, Pausable {
     ///////////////////
     // Errors        //
     ///////////////////
-    error DropnestVault_DepositLessThanMinimumAmount(string protocol, uint256 amount);
+    error DropnestVault_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
     error DropnestVault_ZeroAddressProvided();
     error DropnestVault_ProtocolIsNotWhitelisted();
     error DropnestVault_DepositDoesntMatchAmountProportion();
@@ -23,11 +23,14 @@ contract DropnestVault is Ownable, Pausable {
     /////////////////////
     // State Variables //
     /////////////////////
-    // whitelisted protocol => the target address token transfer to
-    mapping(string => address) public whitelist;
+    // whitelisted protocolId => the target address token transfer to
+    mapping(uint256 => address) public whitelistAddresses;
 
     // protocols list
     string[] public protocols;
+
+    // number of protocols
+    uint256 private protocolNumber = 0;
 
     // minimum deposit amount
     uint256 internal constant MIN_PROTOCOL_DEPOSIT_AMOUNT = 0.1 ether;
@@ -39,10 +42,10 @@ contract DropnestVault is Ownable, Pausable {
     // Events        //
     ///////////////////
     /// @notice Event emitted when ETH is deposited
-    event Deposited(string indexed protocol, address from, address to, uint256 amount);
+    event Deposited(uint256 indexed protocolId, address indexed from, address to, uint256 amount);
 
     /// @notice Event emitted when new protocol added to whitelist
-    event WhitelistSet(string protocol, address to);
+    event WhitelistSet(uint256 protocolId, string protocolName, address to);
 
     ///////////////////
     // Functions     //
@@ -63,37 +66,33 @@ contract DropnestVault is Ownable, Pausable {
     /////////////////////////
     // External Functions  //
     /////////////////////////
-    function stakeMultiple(string[] memory _protocols, uint256[] memory _protocolAmounts) external payable whenNotPaused {
+    function stakeMultiple(uint256[] memory _protocolIds, uint256[] memory _protocolAmounts) external payable whenNotPaused {
         uint256 totalDepositAmount = msg.value;
         uint256 totalSum = 0;
 
-        if (msg.sender.balance < totalDepositAmount) {
-            revert DropnestVault_NotEnoughBalance();
-        }
-
-        if (_protocols.length != _protocolAmounts.length) {
+        if (_protocolIds.length != _protocolAmounts.length) {
             revert DropnestVault_ArraysLengthMissmatch();
         }
-        if (_protocols.length > MAX_NUMBER_OF_PROTOCOLS) {
+        if (_protocolIds.length > MAX_NUMBER_OF_PROTOCOLS) {
             revert DropnestVault_MaxNumberOfProtocolsReached();
         }
-        for (uint256 i = 0; i < _protocols.length; i++) {
+        for (uint256 i = 0; i < _protocolIds.length; i++) {
             totalSum += _protocolAmounts[i];
         }
         if (totalSum != totalDepositAmount) {
             revert DropnestVault_DepositDoesntMatchAmountProportion();
         }
-        for (uint256 i = 0; i < _protocols.length; i++) {
-            string memory protocol = protocols[i];
+        for (uint256 i = 0; i < _protocolIds.length; i++) {
+            uint256 protocolId = _protocolIds[i];
             uint256 amount = _protocolAmounts[i];
-            _stake(protocol, amount);
+            _stake(protocolId, amount);
         }
     }
 
     /// @notice Allows a user to stake their ETH
-    /// @param protocol The protocol to stake on
-    function stake(string memory protocol) external payable whenNotPaused {
-        _stake(protocol, msg.value);
+    /// @param protocolId The protocolId to stake on
+    function stake(uint256 protocolId) external payable whenNotPaused {
+        _stake(protocolId, msg.value);
     }
 
     /// @notice Allows the owner to set the whitelist
@@ -121,35 +120,39 @@ contract DropnestVault is Ownable, Pausable {
     // Private & Internal View & Pure Functions         //
     //////////////////////////////////////////////////////
     /// @notice Allows a user to stake their ETH
-    /// @param protocol The protocol to stake on
+    /// @param protocolId The protocol to stake on
     /// @param protocolAmount The amount of ETH to stake
-    function _stake(string memory protocol, uint256 protocolAmount) private {
+    function _stake(uint256 protocolId, uint256 protocolAmount) private {
         if (protocolAmount < MIN_PROTOCOL_DEPOSIT_AMOUNT) {
-            revert DropnestVault_DepositLessThanMinimumAmount(protocol, protocolAmount);
+            revert DropnestVault_DepositLessThanMinimumAmount(protocolId, protocolAmount);
         }
-        address to = whitelist[protocol];
+        address to = whitelistAddresses[protocolId];
         if (to == address(0)) {
             revert DropnestVault_ProtocolIsNotWhitelisted();
         }
         payable(to).transfer(protocolAmount);
-        emit Deposited(protocol, msg.sender, to, protocolAmount);
+        emit Deposited(protocolId, msg.sender, to, protocolAmount);
     }
 
     /// @notice Sets the whitelist
-    /// @param protocol The protocol to be whitelisted
+    /// @param protocolName The protocol name to be whitelisted
     /// @param to The address corresponding to the protocol
-    function _setWhitelist(string memory protocol, address to) private {
+    function _setWhitelist(string memory protocolName, address to) private {
         if (to == address(0)) {
             revert DropnestVault_ZeroAddressProvided();
         }
-        whitelist[protocol] = to;
-        protocols.push(protocol);
-        emit WhitelistSet(protocol, to);
+        protocolNumber++;
+        protocols.push(protocolName);
+        whitelistAddresses[protocolNumber] = to;
+        emit WhitelistSet(protocolNumber, protocolName, to);
     }
     //////////////////////////////////////////////////////////
     // External & Public View & Pure Functions              //
     //////////////////////////////////////////////////////////
     function getProtocols() public view returns (string[] memory) {
         return protocols;
+    }
+    function getWhitelistAddress(uint256 protocolId) public view returns (address) {
+        return whitelistAddresses[protocolId];
     }
 }
