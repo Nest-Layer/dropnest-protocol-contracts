@@ -9,10 +9,18 @@ contract DeployDropnestVaultContract is Script {
     function run() public {
         address ownerAddress = msg.sender;
         address farmerAddress = msg.sender;
+
         string[] memory protocols = new string[](3);
-        protocols[0] = "Blast";
-        protocols[1] = "Bouncebit";
-        protocols[2] = "Bsquared";
+        protocols[0] = 'Mode';
+        protocols[1] = 'Blast';
+        protocols[2] = 'Taiko';
+        protocols[3] = 'Bouncebit';
+        protocols[4] = 'Dropnest';
+        protocols[5] = 'Azuro';
+        protocols[6] = 'Mantle';
+        protocols[7] = 'Bsquared';
+        protocols[8] = 'Ambient';
+        protocols[9] = 'Karak';
 
         address[] memory addresses = new address[](protocols.length);
         for (uint i = 0; i < protocols.length; ++i) {
