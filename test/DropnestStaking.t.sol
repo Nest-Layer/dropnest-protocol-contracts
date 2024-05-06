@@ -19,7 +19,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     string PROTOCOL_NAME2 = "PROTOCOL_NAME2";
     string PROTOCOL_NAME3 = "PROTOCOL_NAME3";
 
-    string NON_WHITELISTED_PROTOCOL = "NON_WHILTELISTED_PROTOCOL";
+    string NOT_ADDED_PROTOCOL = "NON_WHILTELISTED_PROTOCOL";
 
     uint256 STARTING_AMOUNT = 100 ether;
 
@@ -43,8 +43,8 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         stakingContract = deployer.deployContract(OWNER, protocols, farmers);
     }
 
-    modifier fundAddress(address fundAddress, uint256 amount) {
-        vm.deal(fundAddress, amount);
+    modifier fundAddress(address _fundAddress, uint256 _amount) {
+        vm.deal(_fundAddress, _amount);
         _;
     }
 
@@ -67,19 +67,31 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         return _protocolIds;
     }
 
-    function testInitialWhitelistIsSetCorrectly() public {
+    function testInitialProtocolsIsSetCorrectly() public {
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 2);
-        assertEq(stakingContract.whitelistAddresses(1), FARMER1);
-        assertEq(stakingContract.whitelistAddresses(2), FARMER2);
+        assertEq(stakingContract.farmAddresses(1), FARMER1);
+        assertEq(stakingContract.farmAddresses(2), FARMER2);
     }
 
-    function testSetWhitelistUpdatesWhitelist() public {
+    function testAddProtocolOrUpdateAddsCorrectly() public {
         vm.prank(OWNER);
-        stakingContract.setWhitelist(PROTOCOL_NAME3, FARMER3);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolAdded(3, PROTOCOL_NAME3, FARMER3);
+        stakingContract.addProtocolOrUpdate(PROTOCOL_NAME3, FARMER3);
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 3);
-        assertEq(stakingContract.whitelistAddresses(3), FARMER3);
+        assertEq(stakingContract.farmAddresses(3), FARMER3);
+    }
+
+    function testAddProtocolOrUpdateUpdatesCorrectly() public {
+        vm.prank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolUpdated(1, PROTOCOL_NAME1, FARMER3);
+        stakingContract.addProtocolOrUpdate(PROTOCOL_NAME1, FARMER3);
+        string[] memory _protocols = stakingContract.getProtocols();
+        assertEq(_protocols.length, 2);
+        assertEq(stakingContract.farmAddresses(1), FARMER3);
     }
 
     function testStakeTransfersFundsToFarmer(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
@@ -105,15 +117,15 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         vm.prank(USER1);
         uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
         stakingContract.stake{value: BELOW_MINIMUM_DEPOSIT}(protocolId);
-        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_DepositLessThanMinimumAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_DepositLessThanMinimumAmount.selector, protocolId, BELOW_MINIMUM_DEPOSIT));
     }
 
-    function testStakeFailsWhenProtocolIsNotWhitelisted(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
-        uint256 protocolId = getProtocolId(NON_WHITELISTED_PROTOCOL);
+    function testStakeFailsWhenProtocolIsNotAdded(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
+        uint256 protocolId = getProtocolId(NOT_ADDED_PROTOCOL);
         depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_AMOUNT);
 
         vm.prank(USER1);
-        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotWhitelisted.selector));
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotExist.selector));
         stakingContract.stake{value: depositAmount}(protocolId);
 
         assertEq(USER1.balance, STARTING_AMOUNT, 'Balance should not be affected!');
@@ -137,10 +149,10 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         assertFalse(stakingContract.paused());
     }
 
-    function testSetWhitelistFailsWhenCallerIsNotOwner() public {
+    function testAddProtocolOrUpdateFailsWhenCallerIsNotOwner() public {
         vm.prank(USER1);
         vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
-        stakingContract.setWhitelist(NON_WHITELISTED_PROTOCOL, address(3));
+        stakingContract.addProtocolOrUpdate(NOT_ADDED_PROTOCOL, address(3));
     }
 
 
@@ -173,7 +185,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
         vm.deal(USER1, 10 ether);
         vm.startPrank(USER1);
-        vm.expectRevert(DropnestStaking_ArraysLengthMissmatch.selector);
+        vm.expectRevert(DropnestStaking_ArraysLengthMismatch.selector);
         stakingContract.stakeMultiple{value: 1 ether}(_protocolIds, amounts);
     }
 
@@ -225,4 +237,17 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         stakingContract.stakeMultiple{value: depositAmount1 + depositAmount2}(_protocolIds, amounts);
     }
 
+    function testStakeDoesntWorkWhenProtocolIsNotActive(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_AMOUNT);
+
+        vm.prank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolStatusUpdated(protocolId, false);
+        stakingContract.setProtocolStatus(protocolId, false);
+
+        vm.prank(USER1);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotActive.selector, protocolId));
+        stakingContract.stake{value: depositAmount}(protocolId);
+    }
 }
