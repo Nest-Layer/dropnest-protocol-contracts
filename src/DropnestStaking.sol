@@ -119,7 +119,9 @@ contract DropnestStaking is Ownable, Pausable {
         _addProtocol(protocolName, farmerAddress);
     }
 
-
+    /// @notice Allows the owner to set the protocol status
+    /// @param protocolId The protocol unique identifier
+    /// @param status The boolean depending on the status of the protocol
     function setProtocolStatus(uint256 protocolId, bool status) external onlyOwner {
         if (protocolStatus[protocolId] == status) {
             revert DropnestStaking_CannotChangeProtocolStatus(protocolId, status);
