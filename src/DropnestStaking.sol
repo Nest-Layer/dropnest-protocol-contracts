@@ -3,22 +3,21 @@ pragma solidity ^0.8.23;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {console} from "forge-std/Test.sol";
 
-/// @title DropnestVault
-/// @notice This contract is used for managing deposits to dropnest.
-contract DropnestVault is Ownable, Pausable {
+/// @title DropnestStaking
+/// @notice This contract is used for managing deposits to dropnest protocool.
+contract DropnestStaking is Ownable, Pausable {
 
     ///////////////////
     // Errors        //
     ///////////////////
-    error DropnestVault_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
-    error DropnestVault_ZeroAddressProvided();
-    error DropnestVault_ProtocolIsNotWhitelisted();
-    error DropnestVault_DepositDoesntMatchAmountProportion();
-    error DropnestVault_ArraysLengthMissmatch();
-    error DropnestVault_MaxNumberOfProtocolsReached();
-    error DropnestVault_NotEnoughBalance();
+    error DropnestStaking_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
+    error DropnestStaking_ZeroAddressProvided();
+    error DropnestStaking_ProtocolIsNotWhitelisted();
+    error DropnestStaking_DepositDoesntMatchAmountProportion();
+    error DropnestStaking_ArraysLengthMissmatch();
+    error DropnestStaking_MaxNumberOfProtocolsReached();
+    error DropnestStaking_NotEnoughBalance();
 
     /////////////////////
     // State Variables //
@@ -56,7 +55,7 @@ contract DropnestVault is Ownable, Pausable {
     /// @param _addresses The list of addresses corresponding to the protocols
     constructor(string[] memory _protocols, address[] memory _addresses) Ownable(msg.sender) {
         if (_protocols.length != _addresses.length) {
-            revert DropnestVault_ArraysLengthMissmatch();
+            revert DropnestStaking_ArraysLengthMissmatch();
         }
         for (uint256 i = 0; i < _protocols.length; i++) {
             _setWhitelist(_protocols[i], _addresses[i]);
@@ -71,16 +70,16 @@ contract DropnestVault is Ownable, Pausable {
         uint256 totalSum = 0;
 
         if (_protocolIds.length != _protocolAmounts.length) {
-            revert DropnestVault_ArraysLengthMissmatch();
+            revert DropnestStaking_ArraysLengthMissmatch();
         }
         if (_protocolIds.length > MAX_NUMBER_OF_PROTOCOLS) {
-            revert DropnestVault_MaxNumberOfProtocolsReached();
+            revert DropnestStaking_MaxNumberOfProtocolsReached();
         }
         for (uint256 i = 0; i < _protocolIds.length; i++) {
             totalSum += _protocolAmounts[i];
         }
         if (totalSum != totalDepositAmount) {
-            revert DropnestVault_DepositDoesntMatchAmountProportion();
+            revert DropnestStaking_DepositDoesntMatchAmountProportion();
         }
         for (uint256 i = 0; i < _protocolIds.length; i++) {
             uint256 protocolId = _protocolIds[i];
@@ -124,11 +123,11 @@ contract DropnestVault is Ownable, Pausable {
     /// @param protocolAmount The amount of ETH to stake
     function _stake(uint256 protocolId, uint256 protocolAmount) private {
         if (protocolAmount < MIN_PROTOCOL_DEPOSIT_AMOUNT) {
-            revert DropnestVault_DepositLessThanMinimumAmount(protocolId, protocolAmount);
+            revert DropnestStaking_DepositLessThanMinimumAmount(protocolId, protocolAmount);
         }
         address to = whitelistAddresses[protocolId];
         if (to == address(0)) {
-            revert DropnestVault_ProtocolIsNotWhitelisted();
+            revert DropnestStaking_ProtocolIsNotWhitelisted();
         }
         payable(to).transfer(protocolAmount);
         emit Deposited(protocolId, msg.sender, to, protocolAmount);
@@ -139,7 +138,7 @@ contract DropnestVault is Ownable, Pausable {
     /// @param to The address corresponding to the protocol
     function _setWhitelist(string memory protocolName, address to) private {
         if (to == address(0)) {
-            revert DropnestVault_ZeroAddressProvided();
+            revert DropnestStaking_ZeroAddressProvided();
         }
         protocolNumber++;
         protocols.push(protocolName);
