@@ -6,6 +6,7 @@ import {DropnestStaking} from "../src/DropnestStaking.sol";
 import {Test, console} from "forge-std/Test.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {DeployDropnestStakingContract} from "../script/DeployDropnestStakingContract.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 import {Events} from "./helpers/Events.sol";
 import {Errors} from "./helpers/Errors.sol";
@@ -25,6 +26,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
     uint256 internal constant BELOW_MINIMUM_DEPOSIT = 0.01 ether;
     uint256 internal constant MIN_PROTOCOL_DEPOSIT_AMOUNT = 0.1 ether;
+    uint256 internal constant MAX_NUMBER_OF_PROTOCOLS = 10;
 
     address public OWNER = makeAddr(("owner"));
     address public USER1 = makeAddr(("user1"));
@@ -67,7 +69,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         return _protocolIds;
     }
 
-    function testInitialProtocolsIsSetCorrectly() public {
+    function testInitialProtocolsIsSetCorrectly() public view{
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 2);
         assertEq(stakingContract.farmAddresses(1), FARMER1);
@@ -176,6 +178,26 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         assertEq(farmers[0].balance, depositAmount1, "Incorrect balance for farmer1");
         assertEq(farmers[1].balance, depositAmount2, "Incorrect balance for farmer2");
     }
+
+    function testStakeMultipleShouldFailIfMaxNumberOfProtocolsReached() public {
+        uint256[] memory amounts = new uint256[](MAX_NUMBER_OF_PROTOCOLS + 1);
+        uint256[] memory ids = new uint256[](MAX_NUMBER_OF_PROTOCOLS + 1);
+
+        vm.deal(USER1, MAX_NUMBER_OF_PROTOCOLS * 1 ether);
+
+        vm.startPrank(OWNER);
+        for (uint256 i = 0; i < MAX_NUMBER_OF_PROTOCOLS + 1; i++) {
+            stakingContract.addProtocolOrUpdate(string(abi.encodePacked("Protocol_", Strings.toString(i))), address(1));
+        }
+        for (uint256 i = 0; i < MAX_NUMBER_OF_PROTOCOLS + 1; i++) {
+            amounts[i] = 1 ether;
+        }
+
+        vm.startPrank(USER1);
+        vm.expectRevert(DropnestStaking_MaxNumberOfProtocolsReached.selector);
+        stakingContract.stakeMultiple{value: MAX_NUMBER_OF_PROTOCOLS * 1 ether}(ids, amounts);
+    }
+
 
     function testStakeMultipleWithMismatchedArrays() public {
         uint256[] memory amounts = new uint256[](1);
