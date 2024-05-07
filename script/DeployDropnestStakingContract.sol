@@ -10,7 +10,7 @@ contract DeployDropnestStakingContract is Script {
         address ownerAddress = msg.sender;
         address farmerAddress = msg.sender;
 
-        string[] memory protocols = new string[](3);
+        string[] memory protocols = new string[](10);
         protocols[0] = 'Mode';
         protocols[1] = 'Blast';
         protocols[2] = 'Taiko';
