@@ -57,10 +57,10 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
 
     // @notice Event emitted when protocol status is updated
     event ProtocolStatusUpdated(uint256 protocolId, bool status);
+
     ///////////////////
     // Functions     //
     ///////////////////
-
     /// @notice Constructor to initialize the contract
     /// @param _protocols The list of protocols to be whitelisted
     /// @param _addresses The list of addresses corresponding to the protocols
@@ -76,6 +76,10 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /////////////////////////
     // External Functions  //
     /////////////////////////
+
+    /// @notice Allows a user to stake their ETH on multiple protocols
+    /// @param _protocolIds The array of protocolIds to stake on
+    /// @param _protocolAmounts The array of amounts to stake on each protocol
     function stakeMultiple(uint256[] memory _protocolIds, uint256[] memory _protocolAmounts) external payable whenNotPaused {
         uint256 totalDepositAmount = msg.value;
         uint256 totalSum = 0;
@@ -144,13 +148,10 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         _unpause();
     }
 
-    ///////////////////////
-    // Public Functions  //
-    ///////////////////////
-
     //////////////////////////////////////////////////////
     // Private & Internal View & Pure Functions         //
     //////////////////////////////////////////////////////
+
     /// @notice Allows a user to stake their ETH
     /// @param protocolId The protocol to stake on
     /// @param protocolAmount The amount of ETH to stake
@@ -182,13 +183,18 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         protocolStatus[protocolCounter] = true;
         emit ProtocolAdded(protocolCounter, protocolName, to);
     }
+
     //////////////////////////////////////////////////////////
     // External & Public View & Pure Functions              //
     //////////////////////////////////////////////////////////
+
+    /// @notice Returns the list of protocols
     function getProtocols() public view returns (string[] memory) {
         return protocols;
     }
 
+    /// @notice Returns the address of the specified protocol
+    /// @param protocolId The protocol unique identifier
     function getWhitelistAddress(uint256 protocolId) public view returns (address) {
         return farmAddresses[protocolId];
     }
