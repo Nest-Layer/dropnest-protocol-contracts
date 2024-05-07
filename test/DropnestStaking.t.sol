@@ -125,7 +125,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_AMOUNT);
 
         vm.prank(USER1);
-        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotExist.selector));
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolDoesNotExist.selector));
         stakingContract.stake{value: depositAmount}(protocolId);
 
         assertEq(USER1.balance, STARTING_AMOUNT, 'Balance should not be affected!');

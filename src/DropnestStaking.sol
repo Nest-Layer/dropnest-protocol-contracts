@@ -3,17 +3,18 @@ pragma solidity ^0.8.23;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title DropnestStaking
 /// @notice This contract is being used for managing deposits to dropnest protocool.
-contract DropnestStaking is Ownable, Pausable {
+contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
 
     ///////////////////
     // Errors        //
     ///////////////////
     error DropnestStaking_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
     error DropnestStaking_ZeroAddressProvided();
-    error DropnestStaking_ProtocolIsNotExist();
+    error DropnestStaking_ProtocolDoesNotExist();
     error DropnestStaking_DepositDoesntMatchAmountProportion();
     error DropnestStaking_ArraysLengthMismatch();
     error DropnestStaking_MaxNumberOfProtocolsReached();
@@ -34,12 +35,12 @@ contract DropnestStaking is Ownable, Pausable {
     string[] public protocols;
 
     // number of protocols
-    uint256 private protocolNumber = 0;
+    uint256 private protocolCounter = 0;
 
     // minimum deposit amount
     uint256 internal constant MIN_PROTOCOL_DEPOSIT_AMOUNT = 0.1 ether;
 
-    // maximum number of protocols in one batch
+    // maximum number of protocols to stake in one batch
     uint256 internal constant MAX_NUMBER_OF_PROTOCOLS = 10;
 
     ///////////////////
@@ -123,10 +124,12 @@ contract DropnestStaking is Ownable, Pausable {
     /// @param protocolId The protocol unique identifier
     /// @param status The boolean depending on the status of the protocol
     function setProtocolStatus(uint256 protocolId, bool status) external onlyOwner {
+        if (farmAddresses[protocolId] == address(0)) {
+            revert DropnestStaking_ProtocolDoesNotExist();
+        }
         if (protocolStatus[protocolId] == status) {
             revert DropnestStaking_CannotChangeProtocolStatus(protocolId, status);
         }
-
         protocolStatus[protocolId] = status;
         emit ProtocolStatusUpdated(protocolId, status);
     }
@@ -151,19 +154,19 @@ contract DropnestStaking is Ownable, Pausable {
     /// @notice Allows a user to stake their ETH
     /// @param protocolId The protocol to stake on
     /// @param protocolAmount The amount of ETH to stake
-    function _stake(uint256 protocolId, uint256 protocolAmount) private {
+    function _stake(uint256 protocolId, uint256 protocolAmount) nonReentrant private {
         if (protocolAmount < MIN_PROTOCOL_DEPOSIT_AMOUNT) {
             revert DropnestStaking_DepositLessThanMinimumAmount(protocolId, protocolAmount);
         }
         address to = farmAddresses[protocolId];
         if (to == address(0)) {
-            revert DropnestStaking_ProtocolIsNotExist();
+            revert DropnestStaking_ProtocolDoesNotExist();
         }
         if (!protocolStatus[protocolId]) {
             revert DropnestStaking_ProtocolIsNotActive(protocolId);
         }
-        payable(to).transfer(protocolAmount);
         emit Deposited(protocolId, msg.sender, to, protocolAmount);
+        payable(to).transfer(protocolAmount);
     }
 
     /// @notice Sets the whitelist
@@ -173,11 +176,11 @@ contract DropnestStaking is Ownable, Pausable {
         if (to == address(0)) {
             revert DropnestStaking_ZeroAddressProvided();
         }
-        protocolNumber++;
+        protocolCounter++;
         protocols.push(protocolName);
-        farmAddresses[protocolNumber] = to;
-        protocolStatus[protocolNumber] = true;
-        emit ProtocolAdded(protocolNumber, protocolName, to);
+        farmAddresses[protocolCounter] = to;
+        protocolStatus[protocolCounter] = true;
+        emit ProtocolAdded(protocolCounter, protocolName, to);
     }
     //////////////////////////////////////////////////////////
     // External & Public View & Pure Functions              //

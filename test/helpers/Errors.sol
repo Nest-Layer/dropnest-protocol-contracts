@@ -5,7 +5,7 @@ pragma solidity ^0.8.23;
 contract Errors {
     error DropnestStaking_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
     error DropnestStaking_ZeroAddressProvided();
-    error DropnestStaking_ProtocolIsNotExist();
+    error DropnestStaking_ProtocolDoesNotExist();
     error DropnestStaking_DepositDoesntMatchAmountProportion();
     error DropnestStaking_ArraysLengthMismatch();
     error DropnestStaking_MaxNumberOfProtocolsReached();

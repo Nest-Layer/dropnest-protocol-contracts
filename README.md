@@ -1,8 +1,21 @@
-# Drop protocol
+# Dropnest protocol
 
 
 ## Description
 
+The `DropnestStaking` protocol is a smart contract system for EVM chains. It is designed to manage deposits for the Dropnest protocol and record the deposits via emitting events into the blockchain.
+
+## How it Works
+
+1. **Adding Protocols**: The owner of the contract can add new protocols or update the farmer address for existing ones. Each protocol is identified by a unique protocol ID and has a corresponding farmer address where the staked funds are transferred.
+
+2. **Staking**: Users can stake their ETH on a specific protocol. The staked ETH is transferred to the farmer address of the protocol. The amount of ETH to be staked should be equal to or more than the minimum deposit amount.
+
+3. **Multiple Staking**: Users can also stake their ETH on multiple protocols at once. The total amount of ETH staked should be equal to the sum of the individual amounts staked on each protocol.
+
+4. **Protocol Status**: The owner can set the status of a protocol (active or inactive). Users can only stake their ETH on active protocols.
+
+5. **Pausing**: The owner can pause or unpause the contract. When the contract is paused, users cannot stake their ETH.
 
 ## Tests
 
