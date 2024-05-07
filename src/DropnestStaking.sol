@@ -3,28 +3,32 @@ pragma solidity ^0.8.23;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {console} from "forge-std/Test.sol";
 
-/// @title DropnestVault
-/// @notice This contract is used for managing deposits to dropnest.
-contract DropnestVault is Ownable, Pausable {
+/// @title DropnestStaking
+/// @notice This contract is being used for managing deposits to dropnest protocool.
+contract DropnestStaking is Ownable, Pausable {
 
     ///////////////////
     // Errors        //
     ///////////////////
-    error DropnestVault_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
-    error DropnestVault_ZeroAddressProvided();
-    error DropnestVault_ProtocolIsNotWhitelisted();
-    error DropnestVault_DepositDoesntMatchAmountProportion();
-    error DropnestVault_ArraysLengthMissmatch();
-    error DropnestVault_MaxNumberOfProtocolsReached();
-    error DropnestVault_NotEnoughBalance();
+    error DropnestStaking_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
+    error DropnestStaking_ZeroAddressProvided();
+    error DropnestStaking_ProtocolIsNotExist();
+    error DropnestStaking_DepositDoesntMatchAmountProportion();
+    error DropnestStaking_ArraysLengthMismatch();
+    error DropnestStaking_MaxNumberOfProtocolsReached();
+    error DropnestStaking_NotEnoughBalance();
+    error DropnestStaking_ProtocolIsNotActive(uint256 protocolId);
+    error DropnestStaking_CannotChangeProtocolStatus(uint256 protocolId, bool status);
 
     /////////////////////
     // State Variables //
     /////////////////////
-    // whitelisted protocolId => the target address token transfer to
-    mapping(uint256 => address) public whitelistAddresses;
+    // protocolId => the target address to move the liquidity
+    mapping(uint256 => address) public farmAddresses;
+
+    //protocolId => bool to check if the protocol is active or not
+    mapping(uint256 => bool) public protocolStatus;
 
     // protocols list
     string[] public protocols;
@@ -44,9 +48,14 @@ contract DropnestVault is Ownable, Pausable {
     /// @notice Event emitted when ETH is deposited
     event Deposited(uint256 indexed protocolId, address indexed from, address to, uint256 amount);
 
-    /// @notice Event emitted when new protocol added to whitelist
-    event WhitelistSet(uint256 protocolId, string protocolName, address to);
+    /// @notice Event emitted when new project has been added to protocol
+    event ProtocolAdded(uint256 protocolId, string protocolName, address to);
 
+    /// @notice Event emitted when an existing project updates the farmer address
+    event ProtocolUpdated(uint256 protocolId, string protocolName, address to);
+
+    // @notice Event emitted when protocol status is updated
+    event ProtocolStatusUpdated(uint256 protocolId, bool status);
     ///////////////////
     // Functions     //
     ///////////////////
@@ -56,10 +65,10 @@ contract DropnestVault is Ownable, Pausable {
     /// @param _addresses The list of addresses corresponding to the protocols
     constructor(string[] memory _protocols, address[] memory _addresses) Ownable(msg.sender) {
         if (_protocols.length != _addresses.length) {
-            revert DropnestVault_ArraysLengthMissmatch();
+            revert DropnestStaking_ArraysLengthMismatch();
         }
         for (uint256 i = 0; i < _protocols.length; i++) {
-            _setWhitelist(_protocols[i], _addresses[i]);
+            _addProtocol(_protocols[i], _addresses[i]);
         }
     }
 
@@ -71,16 +80,16 @@ contract DropnestVault is Ownable, Pausable {
         uint256 totalSum = 0;
 
         if (_protocolIds.length != _protocolAmounts.length) {
-            revert DropnestVault_ArraysLengthMissmatch();
+            revert DropnestStaking_ArraysLengthMismatch();
         }
         if (_protocolIds.length > MAX_NUMBER_OF_PROTOCOLS) {
-            revert DropnestVault_MaxNumberOfProtocolsReached();
+            revert DropnestStaking_MaxNumberOfProtocolsReached();
         }
         for (uint256 i = 0; i < _protocolIds.length; i++) {
             totalSum += _protocolAmounts[i];
         }
         if (totalSum != totalDepositAmount) {
-            revert DropnestVault_DepositDoesntMatchAmountProportion();
+            revert DropnestStaking_DepositDoesntMatchAmountProportion();
         }
         for (uint256 i = 0; i < _protocolIds.length; i++) {
             uint256 protocolId = _protocolIds[i];
@@ -95,11 +104,31 @@ contract DropnestVault is Ownable, Pausable {
         _stake(protocolId, msg.value);
     }
 
-    /// @notice Allows the owner to set the whitelist
-    /// @param protocol The protocol to be whitelisted
-    /// @param to The address corresponding to the protocol
-    function setWhitelist(string memory protocol, address to) external onlyOwner {
-        _setWhitelist(protocol, to);
+    /// @notice Allows the owner to add new protocol or update the farmerAddress for existing one
+    /// @param protocolName The protocol name to be added
+    /// @param farmerAddress The address corresponding to the farmer address of the protocol
+    function addProtocolOrUpdate(string memory protocolName, address farmerAddress) external onlyOwner {
+        for (uint256 i = 0; i < protocols.length; i++) {
+            if (keccak256(abi.encodePacked(protocols[i])) == keccak256(abi.encodePacked(protocolName))) {
+                uint256 id = i + 1;
+                farmAddresses[id] = farmerAddress;
+                emit ProtocolUpdated(id, protocolName, farmerAddress);
+                return;
+            }
+        }
+        _addProtocol(protocolName, farmerAddress);
+    }
+
+    /// @notice Allows the owner to set the protocol status
+    /// @param protocolId The protocol unique identifier
+    /// @param status The boolean depending on the status of the protocol
+    function setProtocolStatus(uint256 protocolId, bool status) external onlyOwner {
+        if (protocolStatus[protocolId] == status) {
+            revert DropnestStaking_CannotChangeProtocolStatus(protocolId, status);
+        }
+
+        protocolStatus[protocolId] = status;
+        emit ProtocolStatusUpdated(protocolId, status);
     }
 
     /// @notice Allows the owner to pause the contract
@@ -124,11 +153,14 @@ contract DropnestVault is Ownable, Pausable {
     /// @param protocolAmount The amount of ETH to stake
     function _stake(uint256 protocolId, uint256 protocolAmount) private {
         if (protocolAmount < MIN_PROTOCOL_DEPOSIT_AMOUNT) {
-            revert DropnestVault_DepositLessThanMinimumAmount(protocolId, protocolAmount);
+            revert DropnestStaking_DepositLessThanMinimumAmount(protocolId, protocolAmount);
         }
-        address to = whitelistAddresses[protocolId];
+        address to = farmAddresses[protocolId];
         if (to == address(0)) {
-            revert DropnestVault_ProtocolIsNotWhitelisted();
+            revert DropnestStaking_ProtocolIsNotExist();
+        }
+        if (!protocolStatus[protocolId]) {
+            revert DropnestStaking_ProtocolIsNotActive(protocolId);
         }
         payable(to).transfer(protocolAmount);
         emit Deposited(protocolId, msg.sender, to, protocolAmount);
@@ -137,14 +169,15 @@ contract DropnestVault is Ownable, Pausable {
     /// @notice Sets the whitelist
     /// @param protocolName The protocol name to be whitelisted
     /// @param to The address corresponding to the protocol
-    function _setWhitelist(string memory protocolName, address to) private {
+    function _addProtocol(string memory protocolName, address to) private {
         if (to == address(0)) {
-            revert DropnestVault_ZeroAddressProvided();
+            revert DropnestStaking_ZeroAddressProvided();
         }
         protocolNumber++;
         protocols.push(protocolName);
-        whitelistAddresses[protocolNumber] = to;
-        emit WhitelistSet(protocolNumber, protocolName, to);
+        farmAddresses[protocolNumber] = to;
+        protocolStatus[protocolNumber] = true;
+        emit ProtocolAdded(protocolNumber, protocolName, to);
     }
     //////////////////////////////////////////////////////////
     // External & Public View & Pure Functions              //
@@ -152,7 +185,8 @@ contract DropnestVault is Ownable, Pausable {
     function getProtocols() public view returns (string[] memory) {
         return protocols;
     }
+
     function getWhitelistAddress(uint256 protocolId) public view returns (address) {
-        return whitelistAddresses[protocolId];
+        return farmAddresses[protocolId];
     }
 }

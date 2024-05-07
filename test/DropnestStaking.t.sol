@@ -2,24 +2,24 @@
 
 pragma solidity ^0.8.23;
 
-import {DropnestVault} from "../src/DropnestVault.sol";
+import {DropnestStaking} from "../src/DropnestStaking.sol";
 import {Test, console} from "forge-std/Test.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
-import {DeployDropnestVaultContract} from "../script/DeployDropnestVaultContract.sol";
+import {DeployDropnestStakingContract} from "../script/DeployDropnestStakingContract.sol";
 
 import {Events} from "./helpers/Events.sol";
 import {Errors} from "./helpers/Errors.sol";
 
 
-contract DropnestVaultTest is StdCheats, Test, Events, Errors {
-    DropnestVault public vault;
-    DeployDropnestVaultContract public deployer;
+contract DropnestStakingTest is StdCheats, Test, Events, Errors {
+    DropnestStaking public stakingContract;
+    DeployDropnestStakingContract public deployer;
 
     string PROTOCOL_NAME1 = "PROTOCOL_NAME1";
     string PROTOCOL_NAME2 = "PROTOCOL_NAME2";
     string PROTOCOL_NAME3 = "PROTOCOL_NAME3";
 
-    string NON_WHITELISTED_PROTOCOL = "NON_WHILTELISTED_PROTOCOL";
+    string NOT_ADDED_PROTOCOL = "NON_WHILTELISTED_PROTOCOL";
 
     uint256 STARTING_AMOUNT = 100 ether;
 
@@ -38,18 +38,18 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
     address[] public farmers = [FARMER1, FARMER2];
 
     function setUp() public {
-        deployer = new DeployDropnestVaultContract();
+        deployer = new DeployDropnestStakingContract();
 
-        vault = deployer.deployContract(OWNER, protocols, farmers);
+        stakingContract = deployer.deployContract(OWNER, protocols, farmers);
     }
 
-    modifier fundAddress(address fundAddress, uint256 amount) {
-        vm.deal(fundAddress, amount);
+    modifier fundAddress(address _fundAddress, uint256 _amount) {
+        vm.deal(_fundAddress, _amount);
         _;
     }
 
     function getProtocolId(string memory protocolName) private view returns (uint256) {
-        string[] memory _protocols = vault.getProtocols();
+        string[] memory _protocols = stakingContract.getProtocols();
         for (uint256 i = 0; i < _protocols.length; i++) {
             if (keccak256(abi.encodePacked(_protocols[i])) == keccak256(abi.encodePacked(protocolName))) {
                 return i + 1;
@@ -59,7 +59,7 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
     }
 
     function getProtocolIds() private view returns (uint256[] memory) {
-        string[] memory _protocols = vault.getProtocols();
+        string[] memory _protocols = stakingContract.getProtocols();
         uint256[] memory _protocolIds = new uint256[](_protocols.length);
         for (uint256 i = 0; i < _protocols.length; i++) {
             _protocolIds[i] = i + 1;
@@ -67,19 +67,31 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
         return _protocolIds;
     }
 
-    function testInitialWhitelistIsSetCorrectly() public {
-        string[] memory _protocols = vault.getProtocols();
+    function testInitialProtocolsIsSetCorrectly() public {
+        string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 2);
-        assertEq(vault.whitelistAddresses(1), FARMER1);
-        assertEq(vault.whitelistAddresses(2), FARMER2);
+        assertEq(stakingContract.farmAddresses(1), FARMER1);
+        assertEq(stakingContract.farmAddresses(2), FARMER2);
     }
 
-    function testSetWhitelistUpdatesWhitelist() public {
+    function testAddProtocolOrUpdateAddsCorrectly() public {
         vm.prank(OWNER);
-        vault.setWhitelist(PROTOCOL_NAME3, FARMER3);
-        string[] memory _protocols = vault.getProtocols();
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolAdded(3, PROTOCOL_NAME3, FARMER3);
+        stakingContract.addProtocolOrUpdate(PROTOCOL_NAME3, FARMER3);
+        string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 3);
-        assertEq(vault.whitelistAddresses(3), FARMER3);
+        assertEq(stakingContract.farmAddresses(3), FARMER3);
+    }
+
+    function testAddProtocolOrUpdateUpdatesCorrectly() public {
+        vm.prank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolUpdated(1, PROTOCOL_NAME1, FARMER3);
+        stakingContract.addProtocolOrUpdate(PROTOCOL_NAME1, FARMER3);
+        string[] memory _protocols = stakingContract.getProtocols();
+        assertEq(_protocols.length, 2);
+        assertEq(stakingContract.farmAddresses(1), FARMER3);
     }
 
     function testStakeTransfersFundsToFarmer(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
@@ -89,7 +101,7 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
         vm.prank(USER1);
         vm.expectEmit(true, true, true, true);
         emit Deposited(protocolId, USER1, FARMER1, depositAmount);
-        vault.stake{value: depositAmount}(protocolId);
+        stakingContract.stake{value: depositAmount}(protocolId);
         assertEq(FARMER1.balance, depositAmount);
     }
 
@@ -98,23 +110,23 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
         uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
         vm.prank(USER1);
         vm.expectRevert();
-        vault.stake{value: exceedingBalanceAmount}(protocolId);
+        stakingContract.stake{value: exceedingBalanceAmount}(protocolId);
     }
 
     function testFailStakeLessThanMinimum() public {
         vm.prank(USER1);
         uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
-        vault.stake{value: BELOW_MINIMUM_DEPOSIT}(protocolId);
-        vm.expectRevert(abi.encodeWithSelector(DropnestVault_DepositLessThanMinimumAmount.selector));
+        stakingContract.stake{value: BELOW_MINIMUM_DEPOSIT}(protocolId);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_DepositLessThanMinimumAmount.selector, protocolId, BELOW_MINIMUM_DEPOSIT));
     }
 
-    function testStakeFailsWhenProtocolIsNotWhitelisted(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
-        uint256 protocolId = getProtocolId(NON_WHITELISTED_PROTOCOL);
+    function testStakeFailsWhenProtocolIsNotAdded(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
+        uint256 protocolId = getProtocolId(NOT_ADDED_PROTOCOL);
         depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_AMOUNT);
 
         vm.prank(USER1);
-        vm.expectRevert(abi.encodeWithSelector(DropnestVault_ProtocolIsNotWhitelisted.selector));
-        vault.stake{value: depositAmount}(protocolId);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotExist.selector));
+        stakingContract.stake{value: depositAmount}(protocolId);
 
         assertEq(USER1.balance, STARTING_AMOUNT, 'Balance should not be affected!');
     }
@@ -125,22 +137,22 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
         uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
 
         vm.prank(OWNER);
-        vault.pause();
-        assertTrue(vault.paused());
+        stakingContract.pause();
+        assertTrue(stakingContract.paused());
 
         vm.prank(USER1);
         vm.expectRevert();
-        vault.stake{value: depositAmount}(protocolId);
+        stakingContract.stake{value: depositAmount}(protocolId);
 
         vm.prank(OWNER);
-        vault.unpause();
-        assertFalse(vault.paused());
+        stakingContract.unpause();
+        assertFalse(stakingContract.paused());
     }
 
-    function testSetWhitelistFailsWhenCallerIsNotOwner() public {
+    function testAddProtocolOrUpdateFailsWhenCallerIsNotOwner() public {
         vm.prank(USER1);
         vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
-        vault.setWhitelist(NON_WHITELISTED_PROTOCOL, address(3));
+        stakingContract.addProtocolOrUpdate(NOT_ADDED_PROTOCOL, address(3));
     }
 
 
@@ -157,9 +169,9 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
 
         vm.startPrank(USER1);
 
-        vault.stakeMultiple{value: depositAmount1 + depositAmount2}(_protocolIds, amounts);
+        stakingContract.stakeMultiple{value: depositAmount1 + depositAmount2}(_protocolIds, amounts);
 
-        assertEq(address(vault).balance, 0, "Vault should not hold any ETH");
+        assertEq(address(stakingContract).balance, 0, "staking should not hold any ETH");
         assertEq(USER1.balance, user1InitialAmount - depositAmount1 - depositAmount2, "Incorrect balance for USER1");
         assertEq(farmers[0].balance, depositAmount1, "Incorrect balance for farmer1");
         assertEq(farmers[1].balance, depositAmount2, "Incorrect balance for farmer2");
@@ -173,8 +185,8 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
 
         vm.deal(USER1, 10 ether);
         vm.startPrank(USER1);
-        vm.expectRevert(DropnestVault_ArraysLengthMissmatch.selector);
-        vault.stakeMultiple{value: 1 ether}(_protocolIds, amounts);
+        vm.expectRevert(DropnestStaking_ArraysLengthMismatch.selector);
+        stakingContract.stakeMultiple{value: 1 ether}(_protocolIds, amounts);
     }
 
     function testStakeMultipleWithExcessFunds() public {
@@ -186,11 +198,11 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
 
         vm.deal(USER1, 10 ether);
         vm.startPrank(USER1);
-        vm.expectRevert(DropnestVault_DepositDoesntMatchAmountProportion.selector);
-        vault.stakeMultiple{value: 3 ether}(_protocolIds, amounts);
+        vm.expectRevert(DropnestStaking_DepositDoesntMatchAmountProportion.selector);
+        stakingContract.stakeMultiple{value: 3 ether}(_protocolIds, amounts);
     }
 
-    function testStakeMultipleWithInsufficientFunds(uint256 user1InitialAmount, uint256 depositAmount1, uint256 depositAmount2) public {
+    function testStakeMultipleWithInsufficientFunds(uint256 depositAmount1, uint256 depositAmount2) public {
         depositAmount1 = bound(depositAmount1, MIN_PROTOCOL_DEPOSIT_AMOUNT, 1e30);
         depositAmount2 = bound(depositAmount2, MIN_PROTOCOL_DEPOSIT_AMOUNT, 1e30);
 
@@ -202,23 +214,40 @@ contract DropnestVaultTest is StdCheats, Test, Events, Errors {
 
         vm.startPrank(USER1);
         vm.expectRevert();
-        vault.stakeMultiple{value: depositAmount1 + depositAmount2}(_protocolIds, amounts);
+        stakingContract.stakeMultiple{value: depositAmount1 + depositAmount2}(_protocolIds, amounts);
     }
 
-    function testStakeMultipleWhenPaused() public {
+    function testStakeMultipleWhenPaused(uint256 user1InitialAmount, uint256 depositAmount1, uint256 depositAmount2) public {
+        depositAmount1 = bound(depositAmount1, MIN_PROTOCOL_DEPOSIT_AMOUNT, 1e30);
+        depositAmount2 = bound(depositAmount2, MIN_PROTOCOL_DEPOSIT_AMOUNT, 1e30);
+        user1InitialAmount = bound(user1InitialAmount, depositAmount1 + depositAmount2, UINT256_MAX);
+
         uint256[] memory amounts = new uint256[](2);
         uint256[] memory _protocolIds = getProtocolIds();
 
-        amounts[0] = 1 ether;
-        amounts[1] = 1 ether;
+        amounts[0] = depositAmount1;
+        amounts[1] = depositAmount2;
 
-        vm.deal(USER1, 10 ether);
+        vm.deal(USER1, user1InitialAmount);
         vm.prank(OWNER);
-        vault.pause();
+        stakingContract.pause();
 
         vm.startPrank(USER1);
         vm.expectRevert(EnforcedPause.selector);
-        vault.stakeMultiple{value: 2 ether}(_protocolIds, amounts);
+        stakingContract.stakeMultiple{value: depositAmount1 + depositAmount2}(_protocolIds, amounts);
     }
 
+    function testStakeDoesntWorkWhenProtocolIsNotActive(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_AMOUNT);
+
+        vm.prank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolStatusUpdated(protocolId, false);
+        stakingContract.setProtocolStatus(protocolId, false);
+
+        vm.prank(USER1);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotActive.selector, protocolId));
+        stakingContract.stake{value: depositAmount}(protocolId);
+    }
 }

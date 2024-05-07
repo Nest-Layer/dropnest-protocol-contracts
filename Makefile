@@ -30,7 +30,7 @@ anvil :; anvil -m 'test test test test test test test test test test test junk' 
 
 NETWORK_ARGS := --rpc-url http://localhost:8545 --private-key $(DEFAULT_ANVIL_KEY) --broadcast -vvvv
 
-COMMON_NETWORK_ARGS := --account lyvelyKey --sender ${DEPLOYER_PUBLIC_KEY} --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY)
+COMMON_NETWORK_ARGS := --account dropnestKey --sender ${DEPLOYER_PUBLIC_KEY} --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY)
 
 ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
 	NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) $(COMMON_NETWORK_ARGS)
@@ -47,4 +47,4 @@ endif
 
 deploy:
 	@echo "NETWORK_ARGS: $(NETWORK_ARGS)"
-	@forge script script/DeployDropnestVaultContract.sol:DeployDropnestVaultContract $(NETWORK_ARGS)
+	@forge script script/DeployDropnestStakingContract.sol:DeployDropnestStakingContract $(NETWORK_ARGS)

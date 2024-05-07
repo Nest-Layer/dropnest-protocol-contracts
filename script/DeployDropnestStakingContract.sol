@@ -3,9 +3,9 @@
 pragma solidity ^0.8.23;
 
 import {Script} from "forge-std/Script.sol";
-import {DropnestVault} from "../src/DropnestVault.sol";
+import {DropnestStaking} from "../src/DropnestStaking.sol";
 
-contract DeployDropnestVaultContract is Script {
+contract DeployDropnestStakingContract is Script {
     function run() public {
         address ownerAddress = msg.sender;
         address farmerAddress = msg.sender;
@@ -30,9 +30,9 @@ contract DeployDropnestVaultContract is Script {
         deployContract(ownerAddress, protocols, addresses);
     }
 
-    function deployContract(address owner, string[] memory protocols, address[] memory addresses) public returns (DropnestVault) {
+    function deployContract(address owner, string[] memory protocols, address[] memory addresses) public returns (DropnestStaking) {
         vm.startBroadcast(owner);
-        DropnestVault dropnestContract = new DropnestVault(protocols, addresses);
+        DropnestStaking dropnestContract = new DropnestStaking(protocols, addresses);
         vm.stopBroadcast();
         return dropnestContract;
     }
