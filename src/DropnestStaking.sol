@@ -21,6 +21,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     error DropnestStaking_NotEnoughBalance();
     error DropnestStaking_ProtocolIsNotActive(uint256 protocolId);
     error DropnestStaking_CannotChangeProtocolStatus(uint256 protocolId, bool status);
+    error DropnestStaking_MinProtocolDepositAmountCannotBeZero();
 
     /////////////////////
     // State Variables //
@@ -38,7 +39,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     uint256 private protocolCounter = 0;
 
     // minimum deposit amount
-    uint256 internal constant MIN_PROTOCOL_DEPOSIT_AMOUNT = 0.1 ether;
+    uint256 internal minProtocolDepositAmount = 0.01 ether;
 
     // maximum number of protocols to stake in one batch
     uint256 internal constant MAX_NUMBER_OF_PROTOCOLS = 10;
@@ -57,6 +58,9 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
 
     // @notice Event emitted when protocol status is updated
     event ProtocolStatusUpdated(uint256 protocolId, bool status);
+
+    // @notice Event emitted when protocol status is updated
+    event MinDepositAmountUpdated(uint256 newMinAmount);
 
     ///////////////////
     // Functions     //
@@ -148,6 +152,14 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         _unpause();
     }
 
+    function setMinProtocolDepositAmount(uint256 amount) external onlyOwner {
+        if (amount == 0) {
+            revert DropnestStaking_MinProtocolDepositAmountCannotBeZero();
+        }
+        minProtocolDepositAmount = amount;
+        emit MinDepositAmountUpdated(amount);
+    }
+
     //////////////////////////////////////////////////////
     // Private & Internal View & Pure Functions         //
     //////////////////////////////////////////////////////
@@ -156,7 +168,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /// @param protocolId The protocol to stake on
     /// @param protocolAmount The amount of ETH to stake
     function _stake(uint256 protocolId, uint256 protocolAmount) nonReentrant private {
-        if (protocolAmount < MIN_PROTOCOL_DEPOSIT_AMOUNT) {
+        if (protocolAmount < minProtocolDepositAmount) {
             revert DropnestStaking_DepositLessThanMinimumAmount(protocolId, protocolAmount);
         }
         address to = farmAddresses[protocolId];
@@ -195,7 +207,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
 
     /// @notice Returns the address of the specified protocol
     /// @param protocolId The protocol unique identifier
-    function getWhitelistAddress(uint256 protocolId) public view returns (address) {
+    function getFarmAddress(uint256 protocolId) public view returns (address) {
         return farmAddresses[protocolId];
     }
 }

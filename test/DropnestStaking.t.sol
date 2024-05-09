@@ -69,7 +69,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         return _protocolIds;
     }
 
-    function testInitialProtocolsIsSetCorrectly() public view{
+    function testInitialProtocolsIsSetCorrectly() public view {
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 2);
         assertEq(stakingContract.farmAddresses(1), FARMER1);
@@ -272,4 +272,31 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotActive.selector, protocolId));
         stakingContract.stake{value: depositAmount}(protocolId);
     }
+
+    function testSetMinProtocolDepositAmount(uint256 newAmount) public {
+        newAmount = bound(newAmount, 1, 0.1 ether);
+
+        vm.prank(OWNER);
+
+        vm.expectEmit(true, true, true, true);
+        emit MinDepositAmountUpdated(newAmount);
+        stakingContract.setMinProtocolDepositAmount(newAmount);
+    }
+
+    function testCannotSetZeroMinDepositAmount() public {
+        vm.prank(OWNER);
+
+        vm.expectRevert(DropnestStaking_MinProtocolDepositAmountCannotBeZero.selector);
+        stakingContract.setMinProtocolDepositAmount(0);
+    }
+
+    function testCannotSetZeroMinDepositAmount(uint256 newAmount) public {
+        newAmount = bound(newAmount, 1, 0.1 ether);
+
+        vm.prank(USER1);
+
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
+        stakingContract.setMinProtocolDepositAmount(newAmount);
+    }
+
 }

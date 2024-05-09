@@ -5,5 +5,6 @@ contract Events {
     event ProtocolAdded(uint256 protocolId, string protocolName, address to);
     event ProtocolUpdated(uint256 protocolId, string protocolName, address to);
     event ProtocolStatusUpdated(uint256 protocolId, bool status);
+    event MinDepositAmountUpdated(uint256 newMinAmount);
 
 }

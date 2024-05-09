@@ -12,6 +12,7 @@ contract Errors {
     error DropnestStaking_NotEnoughBalance();
     error DropnestStaking_ProtocolIsNotActive(uint256 protocolId);
     error DropnestStaking_CannotChangeProtocolStatus(uint256 protocolId, bool status);
+    error DropnestStaking_MinProtocolDepositAmountCannotBeZero();
 
     error EnforcedPause();
     error OwnableUnauthorizedAccount(address account);

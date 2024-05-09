@@ -10,22 +10,15 @@ contract DeployDropnestStakingContract is Script {
         address ownerAddress = msg.sender;
         address farmerAddress = msg.sender;
 
-        string[] memory protocols = new string[](10);
-        protocols[0] = 'Mode';
-        protocols[1] = 'Blast';
-        protocols[2] = 'Taiko';
-        protocols[3] = 'Bouncebit';
-        protocols[4] = 'Dropnest';
-        protocols[5] = 'Azuro';
-        protocols[6] = 'Mantle';
-        protocols[7] = 'Bsquared';
-        protocols[8] = 'Ambient';
-        protocols[9] = 'Karak';
+        string[] memory protocols = new string[](3);
+        protocols[0] = 'Karak Network';
+        protocols[1] = 'Linea';
+        protocols[2] = 'Monad';
 
         address[] memory addresses = new address[](protocols.length);
-        for (uint i = 0; i < protocols.length; ++i) {
-            addresses[i] = farmerAddress;
-        }
+        addresses[0] = 0x3B074a7c4DBE3C171758730eC53B26a42C0E0201;
+        addresses[1] = 0xe1FcaAcA6f4F990AAab43BDEE31CAf233d41bb20;
+        addresses[2] = 0xB31ebfEAe685bbE859B49DAA0AbB832150C6Af7D;
 
         deployContract(ownerAddress, protocols, addresses);
     }
