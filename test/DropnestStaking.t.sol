@@ -25,7 +25,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     uint256 STARTING_AMOUNT = 100 ether;
 
     uint256 internal constant BELOW_MINIMUM_DEPOSIT = 0.01 ether;
-    uint256 internal constant MIN_PROTOCOL_DEPOSIT_AMOUNT = 0.1 ether;
+    uint256 internal constant MIN_PROTOCOL_DEPOSIT_AMOUNT = 0.01 ether;
     uint256 internal constant MAX_NUMBER_OF_PROTOCOLS = 10;
 
     address public OWNER = makeAddr(("owner"));
@@ -281,6 +281,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         vm.expectEmit(true, true, true, true);
         emit MinDepositAmountUpdated(newAmount);
         stakingContract.setMinProtocolDepositAmount(newAmount);
+        assertEq(stakingContract.getMinProtocolDepositAmount(), newAmount, "The minimum deposit amount was not updated");
     }
 
     function testCannotSetZeroMinDepositAmount() public {
@@ -297,6 +298,11 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
         vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
         stakingContract.setMinProtocolDepositAmount(newAmount);
+    }
+
+    function testGetMinProtocolDepositAmount() public {
+        uint256 actualMinDeposit = stakingContract.getMinProtocolDepositAmount();
+        assertEq(actualMinDeposit, MIN_PROTOCOL_DEPOSIT_AMOUNT, "The returned minimum deposit amount does not match the expected value");
     }
 
 }
