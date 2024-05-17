@@ -210,4 +210,10 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     function getFarmAddress(uint256 protocolId) public view returns (address) {
         return farmAddresses[protocolId];
     }
+
+    /// @notice Returns the minimum deposit amount for a protocol
+    /// @return The minimum deposit amount in wei
+    function getMinProtocolDepositAmount() public view returns (uint256) {
+        return minProtocolDepositAmount;
+    }
 }
