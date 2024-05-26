@@ -6,13 +6,14 @@ contract Errors {
     error DropnestStaking_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
     error DropnestStaking_ZeroAddressProvided();
     error DropnestStaking_ProtocolDoesNotExist();
-    error DropnestStaking_DepositDoesntMatchAmountProportion();
+    error DropnestStaking_DepositMismatch();
     error DropnestStaking_ArraysLengthMismatch();
-    error DropnestStaking_MaxNumberOfProtocolsReached();
-    error DropnestStaking_NotEnoughBalance();
-    error DropnestStaking_ProtocolIsNotActive(uint256 protocolId);
+    error DropnestStaking_MaxProtocolsReached();
+    error DropnestStaking_InsufficientBalance();
+    error DropnestStaking_ProtocolInactive(uint256 protocolId);
     error DropnestStaking_CannotChangeProtocolStatus(uint256 protocolId, bool status);
-    error DropnestStaking_MinProtocolDepositAmountCannotBeZero();
+    error DropnestStaking_TokenNotAllowed(address token);
+    error DropnestStaking_AmountMustBeGreaterThanZero();
 
     error EnforcedPause();
     error OwnableUnauthorizedAccount(address account);

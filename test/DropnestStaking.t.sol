@@ -11,6 +11,8 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Events} from "./helpers/Events.sol";
 import {Errors} from "./helpers/Errors.sol";
 
+import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+
 
 contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     DropnestStaking public stakingContract;
@@ -22,11 +24,13 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
     string NOT_ADDED_PROTOCOL = "NON_WHILTELISTED_PROTOCOL";
 
-    uint256 STARTING_AMOUNT = 100 ether;
 
     uint256 internal constant BELOW_MINIMUM_DEPOSIT = 0.01 ether;
     uint256 internal constant MIN_PROTOCOL_DEPOSIT_AMOUNT = 0.01 ether;
     uint256 internal constant MAX_NUMBER_OF_PROTOCOLS = 10;
+
+    uint256 internal constant STARTING_AMOUNT = 100 ether;
+    uint256 internal constant STARTING_ERC20_BALANCE = 100 ether;
 
     address public OWNER = makeAddr(("owner"));
     address public USER1 = makeAddr(("user1"));
@@ -38,11 +42,15 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
     string [] public protocols = [PROTOCOL_NAME1, PROTOCOL_NAME2];
     address[] public farmers = [FARMER1, FARMER2];
+    address[] public depositTokens;
 
     function setUp() public {
         deployer = new DeployDropnestStakingContract();
-
-        stakingContract = deployer.deployContract(OWNER, protocols, farmers);
+        uint256[] memory depositAmounts = new uint256[](2);
+        depositAmounts[0] = STARTING_ERC20_BALANCE;
+        depositAmounts[1] = STARTING_ERC20_BALANCE;
+        depositTokens = deployer.deployERC20Mock(OWNER, depositAmounts);
+        stakingContract = deployer.deployContract(OWNER, depositTokens, protocols, farmers);
     }
 
     modifier fundAddress(address _fundAddress, uint256 _amount) {
@@ -69,18 +77,18 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         return _protocolIds;
     }
 
-    function testInitialProtocolsIsSetCorrectly() public view {
+    function testInitialProtocolsIsSetCorrectly() public {
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 2);
-        assertEq(stakingContract.farmAddresses(1), FARMER1);
-        assertEq(stakingContract.farmAddresses(2), FARMER2);
+        assertEq(stakingContract.getFarmAddress(1), FARMER1);
+        assertEq(stakingContract.getFarmAddress(2), FARMER2);
     }
 
     function testAddProtocolOrUpdateAddsCorrectly() public {
         vm.prank(OWNER);
         vm.expectEmit(true, true, true, true);
         emit ProtocolAdded(3, PROTOCOL_NAME3, FARMER3);
-        stakingContract.addProtocolOrUpdate(PROTOCOL_NAME3, FARMER3);
+        stakingContract.addOrUpdateProtocol(PROTOCOL_NAME3, FARMER3);
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 3);
         assertEq(stakingContract.farmAddresses(3), FARMER3);
@@ -90,7 +98,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         vm.prank(OWNER);
         vm.expectEmit(true, true, true, true);
         emit ProtocolUpdated(1, PROTOCOL_NAME1, FARMER3);
-        stakingContract.addProtocolOrUpdate(PROTOCOL_NAME1, FARMER3);
+        stakingContract.addOrUpdateProtocol(PROTOCOL_NAME1, FARMER3);
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 2);
         assertEq(stakingContract.farmAddresses(1), FARMER3);
@@ -154,7 +162,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     function testAddProtocolOrUpdateFailsWhenCallerIsNotOwner() public {
         vm.prank(USER1);
         vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
-        stakingContract.addProtocolOrUpdate(NOT_ADDED_PROTOCOL, address(3));
+        stakingContract.addOrUpdateProtocol(NOT_ADDED_PROTOCOL, address(3));
     }
 
 
@@ -187,14 +195,14 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
         vm.startPrank(OWNER);
         for (uint256 i = 0; i < MAX_NUMBER_OF_PROTOCOLS + 1; i++) {
-            stakingContract.addProtocolOrUpdate(string(abi.encodePacked("Protocol_", Strings.toString(i))), address(1));
+            stakingContract.addOrUpdateProtocol(string(abi.encodePacked("Protocol_", Strings.toString(i))), address(1));
         }
         for (uint256 i = 0; i < MAX_NUMBER_OF_PROTOCOLS + 1; i++) {
             amounts[i] = 1 ether;
         }
 
         vm.startPrank(USER1);
-        vm.expectRevert(DropnestStaking_MaxNumberOfProtocolsReached.selector);
+        vm.expectRevert(DropnestStaking_MaxProtocolsReached.selector);
         stakingContract.stakeMultiple{value: MAX_NUMBER_OF_PROTOCOLS * 1 ether}(ids, amounts);
     }
 
@@ -220,7 +228,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
         vm.deal(USER1, 10 ether);
         vm.startPrank(USER1);
-        vm.expectRevert(DropnestStaking_DepositDoesntMatchAmountProportion.selector);
+        vm.expectRevert(DropnestStaking_DepositMismatch.selector);
         stakingContract.stakeMultiple{value: 3 ether}(_protocolIds, amounts);
     }
 
@@ -269,40 +277,8 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         stakingContract.setProtocolStatus(protocolId, false);
 
         vm.prank(USER1);
-        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolIsNotActive.selector, protocolId));
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolInactive.selector, protocolId));
         stakingContract.stake{value: depositAmount}(protocolId);
-    }
-
-    function testSetMinProtocolDepositAmount(uint256 newAmount) public {
-        newAmount = bound(newAmount, 1, 0.1 ether);
-
-        vm.prank(OWNER);
-
-        vm.expectEmit(true, true, true, true);
-        emit MinDepositAmountUpdated(newAmount);
-        stakingContract.setMinProtocolDepositAmount(newAmount);
-        assertEq(stakingContract.getMinProtocolDepositAmount(), newAmount, "The minimum deposit amount was not updated");
-    }
-
-    function testCannotSetZeroMinDepositAmount() public {
-        vm.prank(OWNER);
-
-        vm.expectRevert(DropnestStaking_MinProtocolDepositAmountCannotBeZero.selector);
-        stakingContract.setMinProtocolDepositAmount(0);
-    }
-
-    function testCannotSetZeroMinDepositAmount(uint256 newAmount) public {
-        newAmount = bound(newAmount, 1, 0.1 ether);
-
-        vm.prank(USER1);
-
-        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
-        stakingContract.setMinProtocolDepositAmount(newAmount);
-    }
-
-    function testGetMinProtocolDepositAmount() public {
-        uint256 actualMinDeposit = stakingContract.getMinProtocolDepositAmount();
-        assertEq(actualMinDeposit, MIN_PROTOCOL_DEPOSIT_AMOUNT, "The returned minimum deposit amount does not match the expected value");
     }
 
 }

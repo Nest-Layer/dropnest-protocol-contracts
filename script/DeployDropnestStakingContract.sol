@@ -4,29 +4,66 @@ pragma solidity ^0.8.23;
 
 import {Script} from "forge-std/Script.sol";
 import {DropnestStaking} from "../src/DropnestStaking.sol";
+import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {console} from "forge-std/Test.sol";
 
 contract DeployDropnestStakingContract is Script {
-    function run() public {
-        address ownerAddress = msg.sender;
-        address farmerAddress = msg.sender;
 
-        string[] memory protocols = new string[](3);
-        protocols[0] = 'Karak Network';
-        protocols[1] = 'Linea';
-        protocols[2] = 'Monad';
+    uint256 public deployerKey;
+    string[] public protocols;
+    address[] public farmerAddresses;
+    address[] public supportedTokens;
+    uint256 public DEFAULT_ANVIL_PRIVATE_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
-        address[] memory addresses = new address[](protocols.length);
-        for (uint i = 0; i < protocols.length; ++i) {
-            addresses[i] = farmerAddress;
+    function run() public returns (DropnestStaking, address[] memory, string[] memory, address[] memory){
+        if (block.chainid == 11155111) {
+            deployerKey = vm.envUint("PRIVATE_KEY");
+            protocols = vm.envString("SUPPORTED_PROTOCOLS", ", ");
+            farmerAddresses = vm.envAddress("FARMER_ADDRESSES", ", ");
+            supportedTokens = vm.envAddress("SUPPORTED_TOKENS", ", ");
+        } else {
+            console.log("Using Anvil Config");
+
+
+            uint256[] memory depositAmounts = new uint256[](2);
+            depositAmounts[0] = 1e23;
+            depositAmounts[1] = 1e23;
+            supportedTokens = deployERC20Mock(vm.addr(DEFAULT_ANVIL_PRIVATE_KEY), depositAmounts);
+
+
+            deployerKey = DEFAULT_ANVIL_PRIVATE_KEY;
+            protocols = vm.envString("SUPPORTED_PROTOCOLS", ", ");
+            farmerAddresses = vm.envAddress("FARMER_ADDRESSES", ", ");
         }
 
-        deployContract(ownerAddress, protocols, addresses);
+        address ownerAddress = vm.addr(deployerKey);
+
+        vm.startBroadcast(ownerAddress);
+        DropnestStaking dropnestContract = new DropnestStaking(supportedTokens, protocols, farmerAddresses);
+        vm.stopBroadcast();
+        return (dropnestContract, supportedTokens, protocols, farmerAddresses);
+
     }
 
-    function deployContract(address owner, string[] memory protocols, address[] memory addresses) public returns (DropnestStaking) {
+    function deployContract(address owner, address[] memory _supportedTokens, string[] memory _protocols, address[] memory _addresses) public returns (DropnestStaking) {
         vm.startBroadcast(owner);
-        DropnestStaking dropnestContract = new DropnestStaking(protocols, addresses);
+        DropnestStaking dropnestContract = new DropnestStaking(_supportedTokens, _protocols, _addresses);
         vm.stopBroadcast();
         return dropnestContract;
     }
+
+
+    function deployERC20Mock(address owner, uint256[] memory depositAmounts) public returns (address[] memory){
+        address[] memory tokens = new address[](depositAmounts.length);
+        for (uint256 i = 0; i < depositAmounts.length; i++) {
+            vm.startBroadcast(owner);
+            ERC20Mock token = new ERC20Mock();
+            token.mint(owner, depositAmounts[i]);
+            vm.stopBroadcast();
+            tokens[i] = address(token);
+        }
+        return tokens;
+    }
 }
+
+
