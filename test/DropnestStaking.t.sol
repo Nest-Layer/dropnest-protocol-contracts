@@ -238,6 +238,18 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         stakingContract.stakeMultiple{value: 3 ether}(_protocolIds, amounts);
     }
 
+    function testStakeMultipleWithOneZeroAmount() public fundAddress(USER1, STARTING_AMOUNT) {
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory _protocolIds = getProtocolIds();
+
+        amounts[0] = 1 ether;
+        amounts[1] = 0;
+
+        vm.startPrank(USER1);
+        vm.expectRevert(DropnestStaking_AmountMustBeGreaterThanZero.selector);
+        stakingContract.stakeMultiple{value: 1 ether}(_protocolIds, amounts);
+    }
+
     function testStakeMultipleWithInsufficientFunds(uint256 depositAmount1, uint256 depositAmount2) public {
         depositAmount1 = bound(depositAmount1, MIN_PROTOCOL_DEPOSIT_AMOUNT, 1e30);
         depositAmount2 = bound(depositAmount2, MIN_PROTOCOL_DEPOSIT_AMOUNT, 1e30);
@@ -410,6 +422,59 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         IERC20(token).approve(address(stakingContract), 2 ether);
         vm.expectRevert(abi.encodeWithSelector(DropnestStaking_TokenNotAllowed.selector, token));
         stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
+    }
+
+    function testAddProtocolWithZeroAddress() public {
+        vm.prank(OWNER);
+        vm.expectRevert(DropnestStaking_ZeroAddressProvided.selector);
+        stakingContract.addOrUpdateProtocol(PROTOCOL_NAME3, address(0));
+    }
+
+    function testProtocolStatusChangeForNonExistentProtocol() public {
+        uint256 nonExistentProtocolId = 999;
+
+        vm.prank(OWNER);
+        vm.expectRevert(DropnestStaking_ProtocolDoesNotExist.selector);
+        stakingContract.setProtocolStatus(nonExistentProtocolId, false);
+    }
+
+    function testRemovingNonSupportedToken() public {
+        address nonSupportedToken = makeAddr("nonSupportedToken");
+
+        vm.prank(OWNER);
+        stakingContract.removeSupportedToken(nonSupportedToken);
+
+        address[] memory supportedTokens = stakingContract.getSupportedTokens();
+        bool found = false;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == nonSupportedToken) {
+                found = true;
+                break;
+            }
+        }
+        assertFalse(found, "Token should not be supported");
+    }
+
+    function testSetProtocolStatusFailsWhenStatusUnchanged() public {
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_CannotChangeProtocolStatus.selector, protocolId, true));
+        stakingContract.setProtocolStatus(protocolId, true);
+    }
+
+    function testSetProtocolStatusSuccessfully() public {
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+
+        vm.prank(OWNER);
+        stakingContract.setProtocolStatus(protocolId, false);
+
+        assertFalse(stakingContract.protocolStatus(protocolId), "Protocol status should be false");
+
+        vm.prank(OWNER);
+        stakingContract.setProtocolStatus(protocolId, true);
+
+        assertTrue(stakingContract.protocolStatus(protocolId), "Protocol status should be true");
     }
 
 }

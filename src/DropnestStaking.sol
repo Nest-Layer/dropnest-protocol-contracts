@@ -226,7 +226,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         emit ERC20Deposited(protocolId, tokenAddress, msg.sender, to, amount);
     }
 
-    function _stake(uint256 protocolId, uint256 protocolAmount) private {
+    function _stake(uint256 protocolId, uint256 protocolAmount) private nonZeroAmount(protocolAmount) {
         address to = farmAddresses[protocolId];
         if (to == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
