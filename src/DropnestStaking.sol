@@ -30,7 +30,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     error DropnestStaking_CannotChangeProtocolStatus(uint256 protocolId, bool status);
     error DropnestStaking_TokenNotAllowed(address token);
     error DropnestStaking_AmountMustBeGreaterThanZero();
-
+    error DropnestStaking_TokenAlreadySupported(address token);
     /////////////////////
     // State Variables //
     /////////////////////
@@ -252,6 +252,9 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /// @notice Adds a new ERC20 token to the list of supported deposit tokens
     /// @param token Token address
     function addSupportedToken(address token) external onlyOwner {
+        if (supportedTokens[token]) {
+            revert DropnestStaking_TokenAlreadySupported(token);
+        }
         supportedTokens[token] = true;
         tokenList.push(token);
     }

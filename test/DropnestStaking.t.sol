@@ -477,4 +477,120 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         assertTrue(stakingContract.protocolStatus(protocolId), "Protocol status should be true");
     }
 
+    function testStakeMultipleWithSameProtocolIds() public fundAddress(USER1, STARTING_AMOUNT) {
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory _protocolIds = new uint256[](2);
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+
+        amounts[0] = 1 ether;
+        amounts[1] = 1 ether;
+        _protocolIds[0] = protocolId;
+        _protocolIds[1] = protocolId;
+
+        vm.startPrank(USER1);
+        stakingContract.stakeMultiple{value: 2 ether}(_protocolIds, amounts);
+        assertEq(FARMER1.balance, 2 ether, "Farmer1 balance should be 2 ether");
+    }
+
+    function testStakeERC20WithZeroAmount() public {
+        address token = depositTokens[0];
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), 0);
+        vm.expectRevert(DropnestStaking_AmountMustBeGreaterThanZero.selector);
+        stakingContract.stakeERC20(protocolId, token, 0);
+    }
+
+    function testAddProtocolWithExistingNameAndDifferentAddress() public {
+        vm.prank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolUpdated(1, PROTOCOL_NAME1, FARMER3);
+        stakingContract.addOrUpdateProtocol(PROTOCOL_NAME1, FARMER3);
+        assertEq(stakingContract.farmAddresses(1), FARMER3);
+    }
+
+    function testAddingSameSupportedTokenTwice() public {
+        address token = depositTokens[0];
+
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_TokenAlreadySupported.selector, token));
+        stakingContract.addSupportedToken(token);
+    }
+
+    function testProtocolStatusChangeForInactiveProtocol() public {
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+
+        vm.prank(OWNER);
+        stakingContract.setProtocolStatus(protocolId, false);
+
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_CannotChangeProtocolStatus.selector, protocolId, false));
+        stakingContract.setProtocolStatus(protocolId, false);
+    }
+
+    function testStakeMultipleERC20WithSameProtocolIds() public {
+        address token = depositTokens[0];
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory _protocolIds = new uint256[](2);
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+
+        amounts[0] = 1 ether;
+        amounts[1] = 1 ether;
+        _protocolIds[0] = protocolId;
+        _protocolIds[1] = protocolId;
+
+        deal(token, USER1, STARTING_ERC20_BALANCE);
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), 2 ether);
+        stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
+
+        assertEq(IERC20(token).balanceOf(FARMER1), 2 ether);
+    }
+
+    function testStakeERC20WhenContractIsPaused() public {
+        address token = depositTokens[0];
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        uint256 depositAmount = 1 ether;
+
+        vm.prank(OWNER);
+        stakingContract.pause();
+        assertTrue(stakingContract.paused());
+
+        deal(token, USER1, STARTING_ERC20_BALANCE);
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), depositAmount);
+        vm.expectRevert(EnforcedPause.selector);
+        stakingContract.stakeERC20(protocolId, token, depositAmount);
+        vm.stopPrank();
+
+        vm.prank(OWNER);
+        stakingContract.unpause();
+        assertFalse(stakingContract.paused());
+    }
+
+    function testStakeMultipleERC20WhenContractIsPaused() public {
+        address token = depositTokens[0];
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory _protocolIds = getProtocolIds();
+        amounts[0] = 1 ether;
+        amounts[1] = 1 ether;
+
+        vm.prank(OWNER);
+        stakingContract.pause();
+        assertTrue(stakingContract.paused());
+
+        deal(token, USER1, STARTING_ERC20_BALANCE);
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), 2 ether);
+        vm.expectRevert(EnforcedPause.selector);
+        stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
+        vm.stopPrank();
+
+        vm.prank(OWNER);
+        stakingContract.unpause();
+        assertFalse(stakingContract.paused());
+    }
+
+
 }
