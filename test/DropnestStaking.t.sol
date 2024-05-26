@@ -12,6 +12,7 @@ import {Events} from "./helpers/Events.sol";
 import {Errors} from "./helpers/Errors.sol";
 
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 
 contract DropnestStakingTest is StdCheats, Test, Events, Errors {
@@ -46,10 +47,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
     function setUp() public {
         deployer = new DeployDropnestStakingContract();
-        uint256[] memory depositAmounts = new uint256[](2);
-        depositAmounts[0] = STARTING_ERC20_BALANCE;
-        depositAmounts[1] = STARTING_ERC20_BALANCE;
-        depositTokens = deployer.deployERC20Mock(OWNER, depositAmounts);
+        depositTokens = deployer.deployERC20Mock(OWNER, 2);
         stakingContract = deployer.deployContract(OWNER, depositTokens, protocols, farmers);
     }
 
@@ -66,6 +64,14 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
             }
         }
         return 0;
+    }
+
+    function deployERC20Mock(address owner, uint256 amount) public returns (address){
+        vm.startBroadcast(owner);
+        ERC20Mock token = new ERC20Mock();
+        token.mint(owner, amount);
+        vm.stopBroadcast();
+        return address(token);
     }
 
     function getProtocolIds() private view returns (uint256[] memory) {
@@ -279,6 +285,131 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         vm.prank(USER1);
         vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolInactive.selector, protocolId));
         stakingContract.stake{value: depositAmount}(protocolId);
+    }
+
+    function testStakeERC20TransfersFundsToFarmer(uint256 depositAmount) public {
+        address token = depositTokens[0];
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_ERC20_BALANCE);
+
+        deal(token, USER1, STARTING_ERC20_BALANCE);
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), depositAmount);
+        vm.expectEmit(true, true, true, true);
+        emit ERC20Deposited(protocolId, token, USER1, FARMER1, depositAmount);
+        stakingContract.stakeERC20(protocolId, token, depositAmount);
+
+        assertEq(IERC20(token).balanceOf(FARMER1), depositAmount);
+    }
+
+    function testStakeERC20FailsIfUserHasInsufficientBalance(uint256 exceedingBalanceAmount) public {
+        exceedingBalanceAmount = bound(exceedingBalanceAmount, STARTING_ERC20_BALANCE + 1 ether, UINT256_MAX);
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        address token = depositTokens[0];
+
+        deal(token, USER1, STARTING_ERC20_BALANCE);
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), exceedingBalanceAmount);
+        vm.expectRevert();
+        stakingContract.stakeERC20(protocolId, token, exceedingBalanceAmount);
+    }
+
+    function testStakeMultipleERC20WithValidInputs(uint256 user1InitialAmount, uint256 depositAmount1, uint256 depositAmount2) public {
+        address token = depositTokens[0];
+        depositAmount1 = bound(depositAmount1, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_ERC20_BALANCE);
+        depositAmount2 = bound(depositAmount2, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_ERC20_BALANCE);
+        user1InitialAmount = bound(user1InitialAmount, depositAmount1 + depositAmount2, UINT256_MAX);
+
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory _protocolIds = getProtocolIds();
+        amounts[0] = depositAmount1;
+        amounts[1] = depositAmount2;
+
+        deal(token, USER1, user1InitialAmount);
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), depositAmount1 + depositAmount2);
+        stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
+
+        assertEq(IERC20(token).balanceOf(FARMER1), depositAmount1);
+        assertEq(IERC20(token).balanceOf(FARMER2), depositAmount2);
+    }
+
+    function testStakeMultipleERC20FailsWithMismatchedArrays() public {
+        address token = depositTokens[0];
+        uint256[] memory amounts = new uint256[](1);
+        uint256[] memory _protocolIds = getProtocolIds();
+
+        amounts[0] = 1 ether;
+
+        deal(token, USER1, 10 ether);
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), 1 ether);
+        vm.expectRevert(DropnestStaking_ArraysLengthMismatch.selector);
+        stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
+    }
+
+    function testAddSupportedToken() public {
+        address newToken = makeAddr("newToken");
+
+        vm.prank(OWNER);
+        stakingContract.addSupportedToken(newToken);
+
+        address[] memory supportedTokens = stakingContract.getSupportedTokens();
+        bool found = false;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == newToken) {
+                found = true;
+                break;
+            }
+        }
+        assertTrue(found, "Token should be supported");
+    }
+
+    function testRemoveSupportedToken() public {
+        address token = depositTokens[0];
+
+        vm.prank(OWNER);
+        stakingContract.removeSupportedToken(token);
+
+        address[] memory supportedTokens = stakingContract.getSupportedTokens();
+        bool found = false;
+        for (uint256 i = 0; i < supportedTokens.length; i++) {
+            if (supportedTokens[i] == token) {
+                found = true;
+                break;
+            }
+        }
+        assertFalse(found, "Token should not be supported");
+    }
+
+    function testStakeERC20FailsWhenTokenIsNotSupported(uint256 depositAmount) public {
+        address token = deployERC20Mock(USER1, 1 ether);
+
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_ERC20_BALANCE);
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), depositAmount);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_TokenNotAllowed.selector, token));
+        stakingContract.stakeERC20(protocolId, token, depositAmount);
+    }
+
+    function testStakeMultipleERC20FailsWhenTokenIsNotSupported() public {
+        address token = deployERC20Mock(USER1, 2 ether);
+
+        uint256[] memory amounts = new uint256[](2);
+        uint256[] memory _protocolIds = getProtocolIds();
+
+        amounts[0] = 1 ether;
+        amounts[1] = 1 ether;
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), 2 ether);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_TokenNotAllowed.selector, token));
+        stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
     }
 
 }

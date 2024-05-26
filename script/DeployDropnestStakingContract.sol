@@ -24,12 +24,7 @@ contract DeployDropnestStakingContract is Script {
         } else {
             console.log("Using Anvil Config");
 
-
-            uint256[] memory depositAmounts = new uint256[](2);
-            depositAmounts[0] = 1e23;
-            depositAmounts[1] = 1e23;
-            supportedTokens = deployERC20Mock(vm.addr(DEFAULT_ANVIL_PRIVATE_KEY), depositAmounts);
-
+            supportedTokens = deployERC20Mock(vm.addr(DEFAULT_ANVIL_PRIVATE_KEY), 2);
 
             deployerKey = DEFAULT_ANVIL_PRIVATE_KEY;
             protocols = vm.envString("SUPPORTED_PROTOCOLS", ", ");
@@ -53,12 +48,11 @@ contract DeployDropnestStakingContract is Script {
     }
 
 
-    function deployERC20Mock(address owner, uint256[] memory depositAmounts) public returns (address[] memory){
-        address[] memory tokens = new address[](depositAmounts.length);
-        for (uint256 i = 0; i < depositAmounts.length; i++) {
+    function deployERC20Mock(address owner, uint256 number) public returns (address[] memory){
+        address[] memory tokens = new address[](number);
+        for (uint256 i = 0; i < number; i++) {
             vm.startBroadcast(owner);
             ERC20Mock token = new ERC20Mock();
-            token.mint(owner, depositAmounts[i]);
             vm.stopBroadcast();
             tokens[i] = address(token);
         }
