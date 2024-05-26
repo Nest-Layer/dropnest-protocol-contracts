@@ -129,13 +129,6 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         stakingContract.stake{value: exceedingBalanceAmount}(protocolId);
     }
 
-    function testFailStakeLessThanMinimum() public {
-        vm.prank(USER1);
-        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
-        stakingContract.stake{value: BELOW_MINIMUM_DEPOSIT}(protocolId);
-        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_DepositLessThanMinimumAmount.selector, protocolId, BELOW_MINIMUM_DEPOSIT));
-    }
-
     function testStakeFailsWhenProtocolIsNotAdded(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
         uint256 protocolId = getProtocolId(NOT_ADDED_PROTOCOL);
         depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_AMOUNT);

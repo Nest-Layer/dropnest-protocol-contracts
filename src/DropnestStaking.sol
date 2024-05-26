@@ -24,7 +24,6 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     error DropnestStaking_DepositMismatch();
     error DropnestStaking_ArraysLengthMismatch();
     error DropnestStaking_MaxProtocolsReached();
-    error DropnestStaking_InsufficientBalance();
     error DropnestStaking_ProtocolInactive(uint256 protocolId);
     error DropnestStaking_CannotChangeProtocolStatus(uint256 protocolId, bool status);
     error DropnestStaking_TokenNotAllowed(address token);
