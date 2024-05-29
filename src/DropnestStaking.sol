@@ -1,48 +1,56 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity 0.8.19;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /// @title DropnestStaking
-/// @notice This contract is being used for managing deposits to dropnest protocool.
+/// @notice This contract is used for managing deposits to the Dropnest protocol.
 contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
+
+    ///////////////////
+    // Libraries     //
+    ///////////////////
+    using SafeERC20 for IERC20;
 
     ///////////////////
     // Errors        //
     ///////////////////
-    error DropnestStaking_DepositLessThanMinimumAmount(uint256 protocolId, uint256 amount);
     error DropnestStaking_ZeroAddressProvided();
     error DropnestStaking_ProtocolDoesNotExist();
-    error DropnestStaking_DepositDoesntMatchAmountProportion();
+    error DropnestStaking_DepositMismatch();
     error DropnestStaking_ArraysLengthMismatch();
-    error DropnestStaking_MaxNumberOfProtocolsReached();
-    error DropnestStaking_NotEnoughBalance();
-    error DropnestStaking_ProtocolIsNotActive(uint256 protocolId);
+    error DropnestStaking_MaxProtocolsReached();
+    error DropnestStaking_ProtocolInactive(uint256 protocolId);
     error DropnestStaking_CannotChangeProtocolStatus(uint256 protocolId, bool status);
-    error DropnestStaking_MinProtocolDepositAmountCannotBeZero();
-
+    error DropnestStaking_TokenNotAllowed(address token);
+    error DropnestStaking_AmountMustBeGreaterThanZero();
+    error DropnestStaking_TokenAlreadySupported(address token);
     /////////////////////
     // State Variables //
     /////////////////////
-    // protocolId => the target address to move the liquidity
+    // protocolId => target address to move the liquidity
     mapping(uint256 => address) public farmAddresses;
 
-    //protocolId => bool to check if the protocol is active or not
+    // protocolId => bool to check if the protocol is active or not
     mapping(uint256 => bool) public protocolStatus;
 
     // protocols list
     string[] public protocols;
 
     // number of protocols
-    uint256 private protocolCounter = 0;
-
-    // minimum deposit amount
-    uint256 internal minProtocolDepositAmount = 0.01 ether;
+    uint256 private protocolCounter;
 
     // maximum number of protocols to stake in one batch
-    uint256 internal constant MAX_NUMBER_OF_PROTOCOLS = 10;
+    uint256 internal constant MAX_PROTOCOLS = 10;
+
+    // mapping to store allowed ERC20 tokens
+    mapping(address => bool) private supportedTokens;
+
+    address[] private tokenList;
 
     ///////////////////
     // Events        //
@@ -50,30 +58,53 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /// @notice Event emitted when ETH is deposited
     event Deposited(uint256 indexed protocolId, address indexed from, address to, uint256 amount);
 
-    /// @notice Event emitted when new project has been added to protocol
+    /// @notice Event emitted when ERC20 is deposited
+    event ERC20Deposited(uint256 indexed protocolId, address indexed token, address indexed from, address to, uint256 amount);
+
+    /// @notice Event emitted when a new protocol is added
     event ProtocolAdded(uint256 protocolId, string protocolName, address to);
 
-    /// @notice Event emitted when an existing project updates the farmer address
+    /// @notice Event emitted when an existing protocol is updated
     event ProtocolUpdated(uint256 protocolId, string protocolName, address to);
 
-    // @notice Event emitted when protocol status is updated
+    /// @notice Event emitted when protocol status is updated
     event ProtocolStatusUpdated(uint256 protocolId, bool status);
 
-    // @notice Event emitted when protocol status is updated
-    event MinDepositAmountUpdated(uint256 newMinAmount);
+    ///////////////////
+    // Modifiers     //
+    ///////////////////
+    modifier nonZeroAmount(uint256 amount) {
+        if (amount == 0) {
+            revert DropnestStaking_AmountMustBeGreaterThanZero();
+        }
+        _;
+    }
+
+    modifier allowedToken(address token) {
+        if (!supportedTokens[token]) {
+            revert DropnestStaking_TokenNotAllowed(token);
+        }
+        _;
+    }
 
     ///////////////////
     // Functions     //
     ///////////////////
+
     /// @notice Constructor to initialize the contract
-    /// @param _protocols The list of protocols to be whitelisted
-    /// @param _addresses The list of addresses corresponding to the protocols
-    constructor(string[] memory _protocols, address[] memory _addresses) Ownable(msg.sender) {
+    /// @param _supportedTokens List of supported tokens
+    /// @param _protocols List of protocol names
+    /// @param _addresses List of addresses corresponding to the protocols
+    constructor(address[] memory _supportedTokens, string[] memory _protocols, address[] memory _addresses) Ownable() {
         if (_protocols.length != _addresses.length) {
             revert DropnestStaking_ArraysLengthMismatch();
         }
         for (uint256 i = 0; i < _protocols.length; i++) {
             _addProtocol(_protocols[i], _addresses[i]);
+        }
+        for (uint256 i = 0; i < _supportedTokens.length; i++) {
+            supportedTokens[_supportedTokens[i]] = true;
+            tokenList.push(_supportedTokens[i]);
         }
     }
 
@@ -81,43 +112,68 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     // External Functions  //
     /////////////////////////
 
-    /// @notice Allows a user to stake their ETH on multiple protocols
-    /// @param _protocolIds The array of protocolIds to stake on
-    /// @param _protocolAmounts The array of amounts to stake on each protocol
-    function stakeMultiple(uint256[] memory _protocolIds, uint256[] memory _protocolAmounts) external payable whenNotPaused {
+    /// @notice Allows a user to stake ETH on multiple protocols
+    /// @param protocolIds Array of protocol IDs to stake on
+    /// @param protocolAmounts Array of amounts to stake on each protocol
+    function stakeMultiple(uint256[] memory protocolIds, uint256[] memory protocolAmounts) external payable whenNotPaused nonReentrant {
         uint256 totalDepositAmount = msg.value;
         uint256 totalSum = 0;
-
-        if (_protocolIds.length != _protocolAmounts.length) {
+        if (protocolIds.length != protocolAmounts.length) {
             revert DropnestStaking_ArraysLengthMismatch();
         }
-        if (_protocolIds.length > MAX_NUMBER_OF_PROTOCOLS) {
-            revert DropnestStaking_MaxNumberOfProtocolsReached();
+        if (protocolIds.length > MAX_PROTOCOLS) {
+            revert DropnestStaking_MaxProtocolsReached();
         }
-        for (uint256 i = 0; i < _protocolIds.length; i++) {
-            totalSum += _protocolAmounts[i];
+        for (uint256 i = 0; i < protocolIds.length; i++) {
+            totalSum += protocolAmounts[i];
         }
         if (totalSum != totalDepositAmount) {
-            revert DropnestStaking_DepositDoesntMatchAmountProportion();
+            revert DropnestStaking_DepositMismatch();
         }
-        for (uint256 i = 0; i < _protocolIds.length; i++) {
-            uint256 protocolId = _protocolIds[i];
-            uint256 amount = _protocolAmounts[i];
-            _stake(protocolId, amount);
+        for (uint256 i = 0; i < protocolIds.length; i++) {
+            _stake(protocolIds[i], protocolAmounts[i]);
         }
     }
 
-    /// @notice Allows a user to stake their ETH
-    /// @param protocolId The protocolId to stake on
-    function stake(uint256 protocolId) external payable whenNotPaused {
+    /// @notice Allows a user to stake ETH
+    /// @param protocolId Protocol ID to stake on
+    function stake(uint256 protocolId) external payable whenNotPaused nonReentrant {
         _stake(protocolId, msg.value);
     }
 
-    /// @notice Allows the owner to add new protocol or update the farmerAddress for existing one
-    /// @param protocolName The protocol name to be added
-    /// @param farmerAddress The address corresponding to the farmer address of the protocol
-    function addProtocolOrUpdate(string memory protocolName, address farmerAddress) external onlyOwner {
-        for (uint256 i = 0; i < protocols.length; i++) {
+    /// @notice Allows a user to stake ERC20 tokens on multiple protocols
+    /// @param token ERC20 token address
+    /// @param protocolIds Array of protocol IDs to stake on
+    /// @param protocolAmounts Array of amounts to stake on each protocol
+    function stakeMultipleERC20(address token, uint256[] memory protocolIds, uint256[] memory protocolAmounts) external whenNotPaused allowedToken(token) nonReentrant {
+        if (protocolIds.length != protocolAmounts.length) {
+            revert DropnestStaking_ArraysLengthMismatch();
+        }
+        if (protocolIds.length > MAX_PROTOCOLS) {
+            revert DropnestStaking_MaxProtocolsReached();
+        }
+        for (uint256 i = 0; i < protocolIds.length; i++) {
+            _stakeERC20(protocolIds[i], token, protocolAmounts[i]);
+        }
+    }
+
+    /// @notice Allows a user to stake ERC20 tokens
+    /// @param protocolId Protocol ID to stake on
+    /// @param token ERC20 token address
+    /// @param amount Amount of tokens to stake
+    function stakeERC20(uint256 protocolId, address token, uint256 amount) external whenNotPaused allowedToken(token) nonReentrant {
+        _stakeERC20(protocolId, token, amount);
+    }
+
+    /// @notice Allows the owner to add or update a protocol
+    /// @param protocolName Protocol name to be added or updated
+    /// @param farmerAddress Address corresponding to the protocol
+    function addOrUpdateProtocol(string memory protocolName, address farmerAddress) external onlyOwner {
+        if (farmerAddress == address(0)) {
+            revert DropnestStaking_ZeroAddressProvided();
+        }
+        uint256 length = protocols.length;
+        for (uint256 i = 0; i < length; i++) {
             if (keccak256(abi.encodePacked(protocols[i])) == keccak256(abi.encodePacked(protocolName))) {
                 uint256 id = i + 1;
                 farmAddresses[id] = farmerAddress;
@@ -129,8 +185,8 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     }
 
     /// @notice Allows the owner to set the protocol status
-    /// @param protocolId The protocol unique identifier
-    /// @param status The boolean depending on the status of the protocol
+    /// @param protocolId Protocol ID
+    /// @param status Protocol status
     function setProtocolStatus(uint256 protocolId, bool status) external onlyOwner {
         if (farmAddresses[protocolId] == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
@@ -152,39 +208,39 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         _unpause();
     }
 
-    function setMinProtocolDepositAmount(uint256 amount) external onlyOwner {
-        if (amount == 0) {
-            revert DropnestStaking_MinProtocolDepositAmountCannotBeZero();
+    //////////////////////////////////////////////////////
+    // Private & Internal Functions                     //
+    //////////////////////////////////////////////////////
+
+    function _stakeERC20(uint256 protocolId, address tokenAddress, uint256 amount) private nonZeroAmount(amount) {
+        if (tokenAddress == address(0)) {
+            revert DropnestStaking_ZeroAddressProvided();
         }
-        minProtocolDepositAmount = amount;
-        emit MinDepositAmountUpdated(amount);
-    }
 
-    //////////////////////////////////////////////////////
-    // Private & Internal View & Pure Functions         //
-    //////////////////////////////////////////////////////
-
-    /// @notice Allows a user to stake their ETH
-    /// @param protocolId The protocol to stake on
-    /// @param protocolAmount The amount of ETH to stake
-    function _stake(uint256 protocolId, uint256 protocolAmount) nonReentrant private {
-        if (protocolAmount < minProtocolDepositAmount) {
-            revert DropnestStaking_DepositLessThanMinimumAmount(protocolId, protocolAmount);
+        if (!protocolStatus[protocolId]) {
+            revert DropnestStaking_ProtocolInactive(protocolId);
         }
         address to = farmAddresses[protocolId];
         if (to == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
         }
+        IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
+        IERC20(tokenAddress).safeTransfer(to, amount);
+        emit ERC20Deposited(protocolId, tokenAddress, msg.sender, to, amount);
+    }
+
+    function _stake(uint256 protocolId, uint256 protocolAmount) private nonZeroAmount(protocolAmount) {
+        address to = farmAddresses[protocolId];
+        if (to == address(0)) {
+            revert DropnestStaking_ProtocolDoesNotExist();
+        }
         if (!protocolStatus[protocolId]) {
-            revert DropnestStaking_ProtocolIsNotActive(protocolId);
+            revert DropnestStaking_ProtocolInactive(protocolId);
         }
         emit Deposited(protocolId, msg.sender, to, protocolAmount);
         payable(to).transfer(protocolAmount);
     }
 
-    /// @notice Sets the whitelist
-    /// @param protocolName The protocol name to be whitelisted
-    /// @param to The address corresponding to the protocol
     function _addProtocol(string memory protocolName, address to) private {
         if (to == address(0)) {
             revert DropnestStaking_ZeroAddressProvided();
@@ -196,8 +252,32 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         emit ProtocolAdded(protocolCounter, protocolName, to);
     }
 
+    /// @notice Adds a new ERC20 token to the list of supported deposit tokens
+    /// @param token Token address
+    function addSupportedToken(address token) external onlyOwner {
+        if (supportedTokens[token]) {
+            revert DropnestStaking_TokenAlreadySupported(token);
+        }
+        supportedTokens[token] = true;
+        tokenList.push(token);
+    }
+
+    /// @notice Removes an ERC20 token from the list of supported deposit tokens
+    /// @param token Token address
+    function removeSupportedToken(address token) external onlyOwner {
+        supportedTokens[token] = false;
+        uint256 length = tokenList.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (tokenList[i] == token) {
+                tokenList[i] = tokenList[length - 1];
+                tokenList.pop();
+                break;
+            }
+        }
+    }
+
     //////////////////////////////////////////////////////////
-    // External & Public View & Pure Functions              //
+    // External & Public View Functions                     //
     //////////////////////////////////////////////////////////
 
     /// @notice Returns the list of protocols
@@ -206,14 +286,13 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     }
 
     /// @notice Returns the address of the specified protocol
-    /// @param protocolId The protocol unique identifier
+    /// @param protocolId Protocol ID
     function getFarmAddress(uint256 protocolId) public view returns (address) {
         return farmAddresses[protocolId];
     }
 
-    /// @notice Returns the minimum deposit amount for a protocol
-    /// @return The minimum deposit amount in wei
-    function getMinProtocolDepositAmount() public view returns (uint256) {
-        return minProtocolDepositAmount;
+    /// @notice Returns the list of supported deposit tokens
+    function getSupportedTokens() public view returns (address[] memory) {
+        return tokenList;
     }
 }
