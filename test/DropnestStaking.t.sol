@@ -47,7 +47,13 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
     function setUp() public {
         deployer = new DeployDropnestStakingContract();
-        depositTokens = deployer.deployERC20Mock(OWNER, 2);
+
+        address[] memory _depositTokens = new address[](3);
+        _depositTokens[0] = deployer.deployERC20Mock(OWNER, "USDT", "USDT", 6);
+        _depositTokens[1] = deployer.deployERC20Mock(OWNER, "USDC", "USDC", 6);
+        _depositTokens[2] = deployer.deployERC20Mock(OWNER, "WBTC", "WBTC", 8);
+        depositTokens = _depositTokens;
+
         stakingContract = deployer.deployContract(OWNER, depositTokens, protocols, farmers);
     }
 
@@ -64,14 +70,6 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
             }
         }
         return 0;
-    }
-
-    function deployERC20Mock(address owner, uint256 amount) public returns (address){
-        vm.startBroadcast(owner);
-        ERC20Mock token = new ERC20Mock();
-        token.mint(owner, amount);
-        vm.stopBroadcast();
-        return address(token);
     }
 
     function getProtocolIds() private view returns (uint256[] memory) {
@@ -391,7 +389,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     }
 
     function testStakeERC20FailsWhenTokenIsNotSupported(uint256 depositAmount) public {
-        address token = deployERC20Mock(USER1, 1 ether);
+        address token = deployer.deployERC20Mock(USER1, "newToken", "newToken", 6);
 
         uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
         depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_ERC20_BALANCE);
@@ -403,7 +401,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     }
 
     function testStakeMultipleERC20FailsWhenTokenIsNotSupported() public {
-        address token = deployERC20Mock(USER1, 2 ether);
+        address token = deployer.deployERC20Mock(USER1, "newToken", "newToken", 6);
 
         uint256[] memory amounts = new uint256[](2);
         uint256[] memory _protocolIds = getProtocolIds();

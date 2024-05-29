@@ -4,7 +4,7 @@ pragma solidity ^0.8.23;
 
 import {Script} from "forge-std/Script.sol";
 import {DropnestStaking} from "../src/DropnestStaking.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import {ERC20Test} from "./helpers/ERC20Test.sol";
 import {console} from "forge-std/Test.sol";
 
 contract DeployDropnestStakingContract is Script {
@@ -24,7 +24,12 @@ contract DeployDropnestStakingContract is Script {
         } else {
             console.log("Using Anvil Config");
 
-            supportedTokens = deployERC20Mock(vm.addr(DEFAULT_ANVIL_PRIVATE_KEY), 2);
+
+            address[] memory _supportedTokens = new address[](3);
+            _supportedTokens[0] = deployERC20Mock(vm.addr(DEFAULT_ANVIL_PRIVATE_KEY), "USDT", "USDT", 6);
+            _supportedTokens[1] = deployERC20Mock(vm.addr(DEFAULT_ANVIL_PRIVATE_KEY), "USDC", "USDC", 6);
+            _supportedTokens[2] = deployERC20Mock(vm.addr(DEFAULT_ANVIL_PRIVATE_KEY), "WBTC", "WBTC", 8);
+            supportedTokens = _supportedTokens;
 
             deployerKey = DEFAULT_ANVIL_PRIVATE_KEY;
             protocols = vm.envString("SUPPORTED_PROTOCOLS", ", ");
@@ -48,15 +53,13 @@ contract DeployDropnestStakingContract is Script {
     }
 
 
-    function deployERC20Mock(address owner, uint256 number) public returns (address[] memory){
-        address[] memory tokens = new address[](number);
-        for (uint256 i = 0; i < number; i++) {
-            vm.startBroadcast(owner);
-            ERC20Mock token = new ERC20Mock();
-            vm.stopBroadcast();
-            tokens[i] = address(token);
-        }
-        return tokens;
+    function deployERC20Mock(address deployer, string memory name_, string memory symbol_, uint8 decimals_) public returns (address){
+        vm.startBroadcast(deployer);
+        ERC20Test token = new ERC20Test(name_, symbol_, decimals_);
+        vm.stopBroadcast();
+        console.log("Deployed ERC20 token at address: %s, name: %s", address(token), name_);
+        return address(token);
+
     }
 }
 
