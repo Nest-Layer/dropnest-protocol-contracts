@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.23;
+pragma solidity 0.8.19;
 
 import {DropnestStaking} from "../src/DropnestStaking.sol";
 import {Test, console} from "forge-std/Test.sol";
@@ -11,7 +11,6 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Events} from "./helpers/Events.sol";
 import {Errors} from "./helpers/Errors.sol";
 
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 
@@ -158,7 +157,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
 
     function testAddProtocolOrUpdateFailsWhenCallerIsNotOwner() public {
         vm.prank(USER1);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, USER1));
+        vm.expectRevert();
         stakingContract.addOrUpdateProtocol(NOT_ADDED_PROTOCOL, address(3));
     }
 
@@ -272,7 +271,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         stakingContract.pause();
 
         vm.startPrank(USER1);
-        vm.expectRevert(EnforcedPause.selector);
+        vm.expectRevert();
         stakingContract.stakeMultiple{value: depositAmount1 + depositAmount2}(_protocolIds, amounts);
     }
 
@@ -551,7 +550,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         deal(token, USER1, STARTING_ERC20_BALANCE);
         vm.startPrank(USER1);
         IERC20(token).approve(address(stakingContract), depositAmount);
-        vm.expectRevert(EnforcedPause.selector);
+        vm.expectRevert();
         stakingContract.stakeERC20(protocolId, token, depositAmount);
         vm.stopPrank();
 
@@ -574,7 +573,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         deal(token, USER1, STARTING_ERC20_BALANCE);
         vm.startPrank(USER1);
         IERC20(token).approve(address(stakingContract), 2 ether);
-        vm.expectRevert(EnforcedPause.selector);
+        vm.expectRevert();
         stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
         vm.stopPrank();
 

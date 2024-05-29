@@ -1,4 +1,4 @@
-pragma solidity ^0.8.23;
+pragma solidity 0.8.19;
 
 contract Events {
     event Deposited(uint256 indexed protocolId, address indexed from, address to, uint256 amount);

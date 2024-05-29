@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.23;
+pragma solidity 0.8.19;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -95,7 +95,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /// @param _supportedTokens List of supported tokens
     /// @param _protocols List of protocol names
     /// @param _addresses List of addresses corresponding to the protocols
-    constructor(address[] memory _supportedTokens, string[] memory _protocols, address[] memory _addresses) Ownable(msg.sender) {
+    constructor(address[] memory _supportedTokens, string[] memory _protocols, address[] memory _addresses) Ownable() {
         if (_protocols.length != _addresses.length) {
             revert DropnestStaking_ArraysLengthMismatch();
         }

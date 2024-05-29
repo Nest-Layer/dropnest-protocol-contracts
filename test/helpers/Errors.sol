@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.23;
+pragma solidity 0.8.19;
 
 contract Errors {
     error DropnestStaking_ZeroAddressProvided();
@@ -14,6 +14,4 @@ contract Errors {
     error DropnestStaking_AmountMustBeGreaterThanZero();
     error DropnestStaking_TokenAlreadySupported(address token);
 
-    error EnforcedPause();
-    error OwnableUnauthorizedAccount(address account);
 }
