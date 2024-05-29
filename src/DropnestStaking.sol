@@ -90,6 +90,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     ///////////////////
     // Functions     //
     ///////////////////
+
     /// @notice Constructor to initialize the contract
     /// @param _supportedTokens List of supported tokens
     /// @param _protocols List of protocol names
@@ -112,25 +113,25 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /////////////////////////
 
     /// @notice Allows a user to stake ETH on multiple protocols
-    /// @param _protocolIds Array of protocol IDs to stake on
-    /// @param _protocolAmounts Array of amounts to stake on each protocol
-    function stakeMultiple(uint256[] memory _protocolIds, uint256[] memory _protocolAmounts) external payable whenNotPaused nonReentrant {
+    /// @param protocolIds Array of protocol IDs to stake on
+    /// @param protocolAmounts Array of amounts to stake on each protocol
+    function stakeMultiple(uint256[] memory protocolIds, uint256[] memory protocolAmounts) external payable whenNotPaused nonReentrant {
         uint256 totalDepositAmount = msg.value;
         uint256 totalSum = 0;
-        if (_protocolIds.length != _protocolAmounts.length) {
+        if (protocolIds.length != protocolAmounts.length) {
             revert DropnestStaking_ArraysLengthMismatch();
         }
-        if (_protocolIds.length > MAX_PROTOCOLS) {
+        if (protocolIds.length > MAX_PROTOCOLS) {
             revert DropnestStaking_MaxProtocolsReached();
         }
-        for (uint256 i = 0; i < _protocolIds.length; i++) {
-            totalSum += _protocolAmounts[i];
+        for (uint256 i = 0; i < protocolIds.length; i++) {
+            totalSum += protocolAmounts[i];
         }
         if (totalSum != totalDepositAmount) {
             revert DropnestStaking_DepositMismatch();
         }
-        for (uint256 i = 0; i < _protocolIds.length; i++) {
-            _stake(_protocolIds[i], _protocolAmounts[i]);
+        for (uint256 i = 0; i < protocolIds.length; i++) {
+            _stake(protocolIds[i], protocolAmounts[i]);
         }
     }
 
@@ -142,17 +143,17 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
 
     /// @notice Allows a user to stake ERC20 tokens on multiple protocols
     /// @param token ERC20 token address
-    /// @param _protocolIds Array of protocol IDs to stake on
-    /// @param _protocolAmounts Array of amounts to stake on each protocol
-    function stakeMultipleERC20(address token, uint256[] memory _protocolIds, uint256[] memory _protocolAmounts) external whenNotPaused allowedToken(token) nonReentrant {
-        if (_protocolIds.length != _protocolAmounts.length) {
+    /// @param protocolIds Array of protocol IDs to stake on
+    /// @param protocolAmounts Array of amounts to stake on each protocol
+    function stakeMultipleERC20(address token, uint256[] memory protocolIds, uint256[] memory protocolAmounts) external whenNotPaused allowedToken(token) nonReentrant {
+        if (protocolIds.length != protocolAmounts.length) {
             revert DropnestStaking_ArraysLengthMismatch();
         }
-        if (_protocolIds.length > MAX_PROTOCOLS) {
+        if (protocolIds.length > MAX_PROTOCOLS) {
             revert DropnestStaking_MaxProtocolsReached();
         }
-        for (uint256 i = 0; i < _protocolIds.length; i++) {
-            _stakeERC20(_protocolIds[i], token, _protocolAmounts[i]);
+        for (uint256 i = 0; i < protocolIds.length; i++) {
+            _stakeERC20(protocolIds[i], token, protocolAmounts[i]);
         }
     }
 
@@ -168,7 +169,11 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /// @param protocolName Protocol name to be added or updated
     /// @param farmerAddress Address corresponding to the protocol
     function addOrUpdateProtocol(string memory protocolName, address farmerAddress) external onlyOwner {
-        for (uint256 i = 0; i < protocols.length; i++) {
+        if (farmerAddress == address(0)) {
+            revert DropnestStaking_ZeroAddressProvided();
+        }
+        uint256 length = protocols.length;
+        for (uint256 i = 0; i < length; i++) {
             if (keccak256(abi.encodePacked(protocols[i])) == keccak256(abi.encodePacked(protocolName))) {
                 uint256 id = i + 1;
                 farmAddresses[id] = farmerAddress;
@@ -261,9 +266,10 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /// @param token Token address
     function removeSupportedToken(address token) external onlyOwner {
         supportedTokens[token] = false;
-        for (uint256 i = 0; i < tokenList.length; i++) {
+        uint256 length = tokenList.length;
+        for (uint256 i = 0; i < length; i++) {
             if (tokenList[i] == token) {
-                tokenList[i] = tokenList[tokenList.length - 1];
+                tokenList[i] = tokenList[length - 1];
                 tokenList.pop();
                 break;
             }
