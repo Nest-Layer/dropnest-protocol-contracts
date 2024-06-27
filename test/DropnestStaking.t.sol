@@ -33,6 +33,7 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     uint256 internal constant STARTING_ERC20_BALANCE = 100 ether;
 
     address public OWNER = makeAddr(("owner"));
+    address public NEW_OWNER = makeAddr("new_owner");
     address public USER1 = makeAddr(("user1"));
     address public USER2 = makeAddr(("user2"));
 
@@ -572,5 +573,46 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         assertFalse(stakingContract.paused());
     }
 
+
+    function testTransferOwnershipInitiatesTransfer() public {
+        vm.prank(OWNER);
+        stakingContract.transferOwnership(NEW_OWNER);
+        assertEq(stakingContract.pendingOwner(), NEW_OWNER);
+    }
+
+    function testOnlyOwnerCanInitiateOwnershipTransfer() public {
+        vm.prank(makeAddr("not_owner"));
+        vm.expectRevert("Ownable: caller is not the owner");
+        stakingContract.transferOwnership(NEW_OWNER);
+    }
+
+    function testAcceptOwnershipCompletesTransfer() public {
+        vm.prank(OWNER);
+        stakingContract.transferOwnership(NEW_OWNER);
+
+        vm.prank(NEW_OWNER);
+        stakingContract.acceptOwnership();
+
+        assertEq(stakingContract.owner(), NEW_OWNER);
+    }
+
+    function testOnlyPendingOwnerCanAcceptOwnership() public {
+        vm.prank(OWNER);
+        stakingContract.transferOwnership(NEW_OWNER);
+
+        vm.prank(makeAddr("not_pending_owner"));
+        vm.expectRevert("Ownable2Step: caller is not the new owner");
+        stakingContract.acceptOwnership();
+    }
+
+    function testPendingOwnerResetsAfterAcceptingOwnership() public {
+        vm.prank(OWNER);
+        stakingContract.transferOwnership(NEW_OWNER);
+
+        vm.prank(NEW_OWNER);
+        stakingContract.acceptOwnership();
+
+        assertEq(stakingContract.pendingOwner(), address(0));
+    }
 
 }
