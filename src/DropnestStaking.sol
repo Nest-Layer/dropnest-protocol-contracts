@@ -70,6 +70,12 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     /// @notice Event emitted when protocol status is updated
     event ProtocolStatusUpdated(uint256 protocolId, bool status);
 
+    /// @notice Event emitted when supported token is added
+    event SupportedTokenAdded(address token);
+
+    /// @notice Event emitted when supported token is removed
+    event SupportedTokenRemoved(address token);
+
     ///////////////////
     // Modifiers     //
     ///////////////////
@@ -260,6 +266,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         }
         supportedTokens[token] = true;
         tokenList.push(token);
+        emit SupportedTokenAdded(token);
     }
 
     /// @notice Removes an ERC20 token from the list of supported deposit tokens
@@ -274,6 +281,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
                 break;
             }
         }
+        emit SupportedTokenRemoved(token);
     }
 
     //////////////////////////////////////////////////////////
