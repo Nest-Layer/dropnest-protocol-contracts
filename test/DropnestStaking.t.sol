@@ -429,20 +429,10 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     }
 
     function testRemovingNonSupportedToken() public {
-        address nonSupportedToken = makeAddr("nonSupportedToken");
-
+        address notSupportedToken = makeAddr("notSupportedToken");
         vm.prank(OWNER);
-        stakingContract.removeSupportedToken(nonSupportedToken);
-
-        address[] memory supportedTokens = stakingContract.getSupportedTokens();
-        bool found = false;
-        for (uint256 i = 0; i < supportedTokens.length; i++) {
-            if (supportedTokens[i] == nonSupportedToken) {
-                found = true;
-                break;
-            }
-        }
-        assertFalse(found, "Token should not be supported");
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_TokenNotAllowed.selector, notSupportedToken));
+        stakingContract.removeSupportedToken(notSupportedToken);
     }
 
     function testSetProtocolStatusFailsWhenStatusUnchanged() public {

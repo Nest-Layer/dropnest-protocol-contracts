@@ -264,7 +264,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
 
     /// @notice Removes an ERC20 token from the list of supported deposit tokens
     /// @param token Token address
-    function removeSupportedToken(address token) external onlyOwner {
+    function removeSupportedToken(address token) external onlyOwner allowedToken(token) {
         supportedTokens[token] = false;
         uint256 length = tokenList.length;
         for (uint256 i = 0; i < length; i++) {
