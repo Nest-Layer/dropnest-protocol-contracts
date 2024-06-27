@@ -13,5 +13,6 @@ contract Errors {
     error DropnestStaking_TokenNotAllowed(address token);
     error DropnestStaking_AmountMustBeGreaterThanZero();
     error DropnestStaking_TokenAlreadySupported(address token);
+    error DropnestStaking_ETHTransferFailed();
 
 }
