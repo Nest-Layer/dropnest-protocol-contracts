@@ -226,8 +226,7 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
         if (to == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
         }
-        IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
-        IERC20(tokenAddress).safeTransfer(to, amount);
+        IERC20(tokenAddress).safeTransferFrom(msg.sender, to, amount);
         emit ERC20Deposited(protocolId, tokenAddress, msg.sender, to, amount);
     }
 
