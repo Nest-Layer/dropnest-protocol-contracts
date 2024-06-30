@@ -14,7 +14,7 @@ The `DropnestStaking` protocol is a smart contract system for EVM chains. It is 
 
 4. **Protocol Status**: The owner can set the status of a protocol (active or inactive). Users can only stake their ETH on active protocols.
 
-5. **Pausing**: The owner can pause or unpause the contract. When the contract is paused, users cannot stake their ETH.
+5. **Pausing**: The owner can pause or unpause the contract. When the contract is paused, users cannot stake their ETH or ERC 20 tokens.
 
 ## Supported Tokens
 
