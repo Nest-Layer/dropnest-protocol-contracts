@@ -29,6 +29,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     error DropnestStaking_TokenNotAllowed(address token);
     error DropnestStaking_AmountMustBeGreaterThanZero();
     error DropnestStaking_TokenAlreadySupported(address token);
+    error DropnestStaking_ETHTransferFailed();
     /////////////////////
     // State Variables //
     /////////////////////
@@ -230,7 +231,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     }
 
     function _stake(uint256 protocolId, uint256 protocolAmount) private nonZeroAmount(protocolAmount) {
-        address to = farmAddresses[protocolId];
+        address payable to = payable(farmAddresses[protocolId]);
         if (to == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
         }
@@ -238,7 +239,11 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
             revert DropnestStaking_ProtocolInactive(protocolId);
         }
         emit Deposited(protocolId, msg.sender, to, protocolAmount);
-        payable(to).transfer(protocolAmount);
+
+        (bool success,) = to.call{value: protocolAmount}("");
+        if (!success) {
+            revert DropnestStaking_ETHTransferFailed();
+        }
     }
 
     function _addProtocol(string memory protocolName, address to) private {

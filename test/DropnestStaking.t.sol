@@ -3,9 +3,12 @@
 pragma solidity 0.8.19;
 
 import {DropnestStaking} from "../src/DropnestStaking.sol";
+import {RevertOnReceive} from "../script/helpers/RevertOnReceive.sol";
 import {Test, console} from "forge-std/Test.sol";
 import {StdCheats} from "forge-std/StdCheats.sol";
 import {DeployDropnestStakingContract} from "../script/DeployDropnestStakingContract.sol";
+import {DeployRevertOnReceiveContract} from "../script/DeployRevertOnReceiveContract.sol";
+
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 import {Events} from "./helpers/Events.sol";
@@ -16,7 +19,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     DropnestStaking public stakingContract;
+    RevertOnReceive public revertOnReceive;
     DeployDropnestStakingContract public deployer;
+    DeployRevertOnReceiveContract public revertOnReceiveDeployer;
 
     string PROTOCOL_NAME1 = "PROTOCOL_NAME1";
     string PROTOCOL_NAME2 = "PROTOCOL_NAME2";
@@ -44,9 +49,10 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     address[] public farmers = [FARMER1, FARMER2];
     address[] public depositTokens;
 
+
     function setUp() public {
         deployer = new DeployDropnestStakingContract();
-
+        revertOnReceiveDeployer = new DeployRevertOnReceiveContract();
         address[] memory _depositTokens = new address[](3);
         _depositTokens[0] = deployer.deployERC20Mock(OWNER, "USDT", "USDT", 6);
         _depositTokens[1] = deployer.deployERC20Mock(OWNER, "USDC", "USDC", 6);
@@ -54,6 +60,10 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         depositTokens = _depositTokens;
 
         stakingContract = deployer.deployContract(OWNER, depositTokens, protocols, farmers);
+
+        revertOnReceive = revertOnReceiveDeployer.deployContract(OWNER);
+
+
     }
 
     modifier fundAddress(address _fundAddress, uint256 _amount) {
@@ -116,6 +126,18 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         emit Deposited(protocolId, USER1, FARMER1, depositAmount);
         stakingContract.stake{value: depositAmount}(protocolId);
         assertEq(FARMER1.balance, depositAmount);
+    }
+
+    function testStakeTransfersFundsToInvalidAddress(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_AMOUNT);
+
+        vm.prank(OWNER);
+        stakingContract.addOrUpdateProtocol(PROTOCOL_NAME1, address(revertOnReceive));
+
+        vm.prank(USER1);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ETHTransferFailed.selector));
+        stakingContract.stake{value: depositAmount}(protocolId);
     }
 
     function testStakeFailsIfUserHasInsufficientBalance(uint256 exceedingBalanceAmount) public {
