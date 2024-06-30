@@ -6,10 +6,11 @@ import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /// @title DropnestStaking
 /// @notice This contract is used for managing deposits to the Dropnest protocol.
-contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
+contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
 
     ///////////////////
     // Libraries     //
@@ -29,6 +30,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
     error DropnestStaking_TokenNotAllowed(address token);
     error DropnestStaking_AmountMustBeGreaterThanZero();
     error DropnestStaking_TokenAlreadySupported(address token);
+    error DropnestStaking_ETHTransferFailed();
     /////////////////////
     // State Variables //
     /////////////////////
@@ -215,7 +217,7 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
 
     /// @notice Removes an ERC20 token from the list of supported deposit tokens
     /// @param token Token address
-    function removeSupportedToken(address token) external onlyOwner {
+    function removeSupportedToken(address token) external onlyOwner allowedToken(token) {
         supportedTokens[token] = false;
         uint256 length = tokenList.length;
         for (uint256 i = 0; i < length; i++) {
@@ -262,13 +264,12 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
         if (to == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
         }
-        IERC20(tokenAddress).safeTransferFrom(msg.sender, address(this), amount);
-        IERC20(tokenAddress).safeTransfer(to, amount);
+        IERC20(tokenAddress).safeTransferFrom(msg.sender, to, amount);
         emit ERC20Deposited(protocolId, tokenAddress, msg.sender, to, amount);
     }
 
     function _stake(uint256 protocolId, uint256 protocolAmount) private nonZeroAmount(protocolAmount) {
-        address to = farmAddresses[protocolId];
+        address payable to = payable(farmAddresses[protocolId]);
         if (to == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
         }
@@ -276,7 +277,11 @@ contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
             revert DropnestStaking_ProtocolInactive(protocolId);
         }
         emit Deposited(protocolId, msg.sender, to, protocolAmount);
-        payable(to).transfer(protocolAmount);
+
+        (bool success,) = to.call{value: protocolAmount}("");
+        if (!success) {
+            revert DropnestStaking_ETHTransferFailed();
+        }
     }
 
     function _addProtocol(string memory protocolName, address to) private {

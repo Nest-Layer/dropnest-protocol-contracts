@@ -9,7 +9,7 @@ The `DropnestStaking` protocol is a smart contract system for EVM chains. It is 
 
 1. **Adding Protocols**: The owner of the contract can add new protocols or update the farmer address for existing ones. Each protocol is identified by a unique protocol ID and has a corresponding farmer address where the staked funds are transferred.
 
-2. **Staking**: Users can stake their ETH or predetermined ERC20 tokens on a specific protocol. The staked tokens are transferred to the farmer address of the protocol. The amount of tokens to be staked should be equal to or more than the minimum deposit amount.
+2. **Staking**: Users can stake their ETH or predetermined ERC20 tokens on a specific protocol. The staked tokens are transferred to the farmer address of the protocol.
 
 3. **Multiple Staking**: Users can also stake their ETH or ERC20 tokens on multiple protocols at once. The total amount of tokens staked should be equal to the sum of the individual amounts staked on each protocol.
 
