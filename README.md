@@ -12,7 +12,7 @@ The `DropnestStaking` protocol is a smart contract system for EVM chains. It is 
 
 3. **Multiple Staking**: Users can also stake their ETH or ERC20 tokens on multiple protocols at once. The total amount of tokens staked should be equal to the sum of the individual amounts staked on each protocol.
 
-4. **Protocol Status**: The owner can set the status of a protocol (active or inactive). Users can only stake their ETH on active protocols.
+4. **Protocol Status**: The owner can set the status of a protocol (active or inactive). Users can only stake their ETH or ERC20 on active protocols.
 
 5. **Pausing**: The owner can pause or unpause the contract. When the contract is paused, users cannot stake their ETH or ERC 20 tokens.
 
