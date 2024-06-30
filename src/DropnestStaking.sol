@@ -111,8 +111,7 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
             _addProtocol(_protocols[i], _addresses[i]);
         }
         for (uint256 i = 0; i < _supportedTokens.length; i++) {
-            supportedTokens[_supportedTokens[i]] = true;
-            tokenList.push(_supportedTokens[i]);
+            addSupportedToken(_supportedTokens[i]);
         }
     }
 
@@ -216,6 +215,39 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
         _unpause();
     }
 
+    /// @notice Removes an ERC20 token from the list of supported deposit tokens
+    /// @param token Token address
+    function removeSupportedToken(address token) external onlyOwner allowedToken(token) {
+        supportedTokens[token] = false;
+        uint256 length = tokenList.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (tokenList[i] == token) {
+                tokenList[i] = tokenList[length - 1];
+                tokenList.pop();
+                break;
+            }
+        }
+        emit SupportedTokenRemoved(token);
+    }
+
+    //////////////////////////////////////////////////////
+    // Public Functions                                 //
+    //////////////////////////////////////////////////////
+
+    /// @notice Adds a new ERC20 token to the list of supported deposit tokens
+    /// @param token Token address
+    function addSupportedToken(address token) public onlyOwner {
+        if (token == address(0)) {
+            revert DropnestStaking_ZeroAddressProvided();
+        }
+        if (supportedTokens[token]) {
+            revert DropnestStaking_TokenAlreadySupported(token);
+        }
+        supportedTokens[token] = true;
+        tokenList.push(token);
+        emit SupportedTokenAdded(token);
+    }
+
     //////////////////////////////////////////////////////
     // Private & Internal Functions                     //
     //////////////////////////////////////////////////////
@@ -261,32 +293,6 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
         farmAddresses[protocolCounter] = to;
         protocolStatus[protocolCounter] = true;
         emit ProtocolAdded(protocolCounter, protocolName, to);
-    }
-
-    /// @notice Adds a new ERC20 token to the list of supported deposit tokens
-    /// @param token Token address
-    function addSupportedToken(address token) external onlyOwner {
-        if (supportedTokens[token]) {
-            revert DropnestStaking_TokenAlreadySupported(token);
-        }
-        supportedTokens[token] = true;
-        tokenList.push(token);
-        emit SupportedTokenAdded(token);
-    }
-
-    /// @notice Removes an ERC20 token from the list of supported deposit tokens
-    /// @param token Token address
-    function removeSupportedToken(address token) external onlyOwner allowedToken(token) {
-        supportedTokens[token] = false;
-        uint256 length = tokenList.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (tokenList[i] == token) {
-                tokenList[i] = tokenList[length - 1];
-                tokenList.pop();
-                break;
-            }
-        }
-        emit SupportedTokenRemoved(token);
     }
 
     //////////////////////////////////////////////////////////
