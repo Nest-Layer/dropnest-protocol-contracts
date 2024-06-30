@@ -29,7 +29,7 @@ These tokens are approved for staking, ensuring compatibility and secure transac
 
 1. **Centralization Risks**: We acknowledge the potential risks associated with centralization and have implemented multi-signature wallets for key administrative functions to distribute control and reduce single points of failure. Regular audits and monitoring are in place to ensure secure and responsible use of administrative keys.
 
-2. **Reliance on External Contracts**: The `farmAddresses` and `supportedTokens` mappings rely on external contracts. We carefully select and use the contracts that only were audited by top security firms to ensure their security and reliability. We also have a contingency plan to replace or modify these contracts if vulnerabilities are discovered.
+2. **Reliance on External Contracts**: The `farmAddresses` and `supportedTokens` mappings rely on external contracts. The `farmAddresses` would be our [SAFE Wallets](https://safe.global/) with whitelisted addressbook. We carefully select the protocols that we are whitelisting, and use the contracts that only were audited by top security firms to ensure their security and reliability. We also have a contingency plan to replace or modify these contracts if vulnerabilities are discovered.
 
 3. **Transparency in Fund Transfers**: All funds transferred to `farmAddresses` are tracked transparently through on-chain events. We are committed to providing detailed documentation about the usage of staked funds and ensuring that users have access to comprehensive reports on fund allocation and outcomes.
 
