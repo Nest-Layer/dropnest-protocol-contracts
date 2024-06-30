@@ -1,6 +1,5 @@
 # Dropnest protocol
 
-
 ## Description
 
 The `DropnestStaking` protocol is a smart contract system for EVM chains. It is designed to manage deposits for the Dropnest protocol and record the deposits via emitting events into the blockchain.
@@ -16,6 +15,29 @@ The `DropnestStaking` protocol is a smart contract system for EVM chains. It is 
 4. **Protocol Status**: The owner can set the status of a protocol (active or inactive). Users can only stake their ETH on active protocols.
 
 5. **Pausing**: The owner can pause or unpause the contract. When the contract is paused, users cannot stake their ETH.
+
+## Supported Tokens
+
+The `DropnestStaking` contract will supports the following ERC20 tokens from the bootstrap:
+
+- **USDT (Tether USD)**
+- **USDC (USD Coin)**
+
+These tokens are approved for staking, ensuring compatibility and secure transactions within the protocol.
+
+## Risk Mitigation Strategies
+
+1. **Centralization Risks**: We acknowledge the potential risks associated with centralization and have implemented multi-signature wallets for key administrative functions to distribute control and reduce single points of failure. Regular audits and monitoring are in place to ensure secure and responsible use of administrative keys.
+
+2. **Reliance on External Contracts**: The `farmAddresses` and `supportedTokens` mappings rely on external contracts. We carefully select and use the contracts that only were audited by top security firms to ensure their security and reliability. We also have a contingency plan to replace or modify these contracts if vulnerabilities are discovered.
+
+3. **Transparency in Fund Transfers**: All funds transferred to `farmAddresses` are tracked transparently through on-chain events. We are committed to providing detailed documentation about the usage of staked funds and ensuring that users have access to comprehensive reports on fund allocation and outcomes.
+
+4. **On-Chain Information and User Returns**: Although the staking protocol involves off-chain calculations for rewards and balances, we are working on implementing the mechanism to provide users with real-time information about their staking outcomes. This includes potential returns and other relevant metrics to enhance transparency.
+
+5. **Handling Fee-on-Transfer Tokens**: We currently do not support fee-on-transfer tokens. However, we are designing our off-chain components to handle discrepancies between sent and received amounts, ensuring accurate tracking and calculations. If support for such tokens is introduced, our system will be adapted to prevent mismatches and maintain integrity.
+
+We are committed to continuous improvement and regular audits to uphold these standards.
 
 ## Tests
 
