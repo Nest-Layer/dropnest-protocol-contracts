@@ -31,6 +31,7 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
     error DropnestStaking_AmountMustBeGreaterThanZero();
     error DropnestStaking_TokenAlreadySupported(address token);
     error DropnestStaking_ETHTransferFailed();
+    error DropnestStaking_CannotBeEmptyArray();
     /////////////////////
     // State Variables //
     /////////////////////
@@ -104,6 +105,10 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param _protocols List of protocol names
     /// @param _addresses List of addresses corresponding to the protocols
     constructor(address[] memory _supportedTokens, string[] memory _protocols, address[] memory _addresses) Ownable() {
+        if (_supportedTokens.length == 0 || _protocols.length == 0 || _addresses.length == 0) {
+            revert DropnestStaking_CannotBeEmptyArray();
+        }
+
         if (_protocols.length != _addresses.length) {
             revert DropnestStaking_ArraysLengthMismatch();
         }
@@ -176,9 +181,6 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
     /// @param protocolName Protocol name to be added or updated
     /// @param farmerAddress Address corresponding to the protocol
     function addOrUpdateProtocol(string memory protocolName, address farmerAddress) external onlyOwner {
-        if (farmerAddress == address(0)) {
-            revert DropnestStaking_ZeroAddressProvided();
-        }
         uint256 length = protocols.length;
         for (uint256 i = 0; i < length; i++) {
             if (keccak256(abi.encodePacked(protocols[i])) == keccak256(abi.encodePacked(protocolName))) {
@@ -257,13 +259,15 @@ contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
             revert DropnestStaking_ZeroAddressProvided();
         }
 
-        if (!protocolStatus[protocolId]) {
-            revert DropnestStaking_ProtocolInactive(protocolId);
-        }
         address to = farmAddresses[protocolId];
         if (to == address(0)) {
             revert DropnestStaking_ProtocolDoesNotExist();
         }
+
+        if (!protocolStatus[protocolId]) {
+            revert DropnestStaking_ProtocolInactive(protocolId);
+        }
+
         IERC20(tokenAddress).safeTransferFrom(msg.sender, to, amount);
         emit ERC20Deposited(protocolId, tokenAddress, msg.sender, to, amount);
     }

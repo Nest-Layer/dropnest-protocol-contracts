@@ -91,6 +91,45 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         return _protocolIds;
     }
 
+
+    function testConstructorWithEmptyParameters() public {
+        address[] memory emptyTokens = new address[](0);
+        string[] memory emptyProtocols = new string[](0);
+        address[] memory emptyAddresses = new address[](0);
+
+        DeployDropnestStakingContract newDeployer = new DeployDropnestStakingContract();
+        vm.expectRevert(DropnestStaking_CannotBeEmptyArray.selector);
+        newDeployer.deployContract(OWNER, emptyTokens, emptyProtocols, emptyAddresses);
+    }
+
+    function testConstructorWithMismatchedLengths() public {
+        address[] memory _tokens = new address[](1);
+        _tokens[0] = address(1);
+        string[] memory _protocols = new string[](1);
+        _protocols[0] = "Protocol1";
+        address[] memory _addresses = new address[](2);
+        _addresses[0] = address(2);
+        _addresses[1] = address(3);
+
+        DeployDropnestStakingContract newDeployer = new DeployDropnestStakingContract();
+        vm.expectRevert(DropnestStaking_ArraysLengthMismatch.selector);
+        newDeployer.deployContract(OWNER, _tokens, _protocols, _addresses);
+    }
+
+    function testConstructorWithZeroAddress() public {
+        address[] memory _tokens = new address[](1);
+        _tokens[0] = address(1);
+        string[] memory _protocols = new string[](1);
+        _protocols[0] = "Protocol1";
+        address[] memory _addresses = new address[](1);
+        _addresses[0] = address(0);
+
+        DeployDropnestStakingContract newDeployer = new DeployDropnestStakingContract();
+        vm.expectRevert(DropnestStaking_ZeroAddressProvided.selector);
+        newDeployer.deployContract(OWNER, _tokens, _protocols, _addresses);
+    }
+
+
     function testInitialProtocolsIsSetCorrectly() public {
         string[] memory _protocols = stakingContract.getProtocols();
         assertEq(_protocols.length, 2);
@@ -127,6 +166,13 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         emit Deposited(protocolId, USER1, FARMER1, depositAmount);
         stakingContract.stake{value: depositAmount}(protocolId);
         assertEq(FARMER1.balance, depositAmount);
+    }
+
+    function testStakeWithZeroETH() public {
+        uint256 protocolId = 1;
+        vm.prank(USER1);
+        vm.expectRevert(DropnestStaking_AmountMustBeGreaterThanZero.selector);
+        stakingContract.stake{value: 0}(protocolId);
     }
 
     function testStakeTransfersFundsToInvalidAddress(uint256 depositAmount) public fundAddress(USER1, STARTING_AMOUNT) {
@@ -328,6 +374,37 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         assertEq(IERC20(token).balanceOf(FARMER1), depositAmount);
     }
 
+    function testStakeERC20FailsIfProtocolIsInactive(uint256 depositAmount) public {
+        address token = depositTokens[0];
+        uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
+        depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_ERC20_BALANCE);
+
+        deal(token, USER1, STARTING_ERC20_BALANCE);
+
+        vm.prank(OWNER);
+        stakingContract.setProtocolStatus(protocolId, false);
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), depositAmount);
+
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_ProtocolInactive.selector, protocolId));
+        stakingContract.stakeERC20(protocolId, token, depositAmount);
+    }
+
+    function testStakeERC20FailsIfProtocolDoesntExist(uint256 depositAmount) public {
+        address token = depositTokens[0];
+        uint256 protocolId = 1000;
+        depositAmount = bound(depositAmount, MIN_PROTOCOL_DEPOSIT_AMOUNT, STARTING_ERC20_BALANCE);
+
+        deal(token, USER1, STARTING_ERC20_BALANCE);
+
+        vm.startPrank(USER1);
+        IERC20(token).approve(address(stakingContract), depositAmount);
+
+        vm.expectRevert(DropnestStaking_ProtocolDoesNotExist.selector);
+        stakingContract.stakeERC20(protocolId, token, depositAmount);
+    }
+
     function testStakeERC20FailsIfUserHasInsufficientBalance(uint256 exceedingBalanceAmount) public {
         exceedingBalanceAmount = bound(exceedingBalanceAmount, STARTING_ERC20_BALANCE + 1 ether, UINT256_MAX);
         uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
@@ -414,6 +491,13 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         assertFalse(found, "Token should not be supported");
     }
 
+    function testRemoveNonSupportedToken() public {
+        address notSupportedToken = makeAddr("notSupportedToken");
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_TokenNotAllowed.selector, notSupportedToken));
+        stakingContract.removeSupportedToken(notSupportedToken);
+    }
+
     function testStakeERC20FailsWhenTokenIsNotSupported(uint256 depositAmount) public {
         address token = deployer.deployERC20Mock(USER1, "newToken", "newToken", 6);
 
@@ -441,19 +525,34 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         stakingContract.stakeMultipleERC20(token, _protocolIds, amounts);
     }
 
+    function testStakeMultipleERC20FailsIfMaxNumberOfProtocolsReached() public {
+        address token = depositTokens[0];
+
+        uint256[] memory amounts = new uint256[](MAX_NUMBER_OF_PROTOCOLS + 1);
+        uint256[] memory ids = new uint256[](MAX_NUMBER_OF_PROTOCOLS + 1);
+
+        vm.deal(USER1, MAX_NUMBER_OF_PROTOCOLS * 1 ether);
+
+        vm.startPrank(OWNER);
+        for (uint256 i = 0; i < MAX_NUMBER_OF_PROTOCOLS + 1; i++) {
+            stakingContract.addOrUpdateProtocol(string(abi.encodePacked("Protocol_", Strings.toString(i))), address(1));
+        }
+        for (uint256 i = 0; i < MAX_NUMBER_OF_PROTOCOLS + 1; i++) {
+            amounts[i] = 1 ether;
+        }
+
+        vm.startPrank(USER1);
+        vm.expectRevert(DropnestStaking_MaxProtocolsReached.selector);
+        stakingContract.stakeMultipleERC20(token, ids, amounts);
+
+    }
+
     function testAddProtocolWithZeroAddress() public {
         vm.prank(OWNER);
         vm.expectRevert(DropnestStaking_ZeroAddressProvided.selector);
         stakingContract.addOrUpdateProtocol(PROTOCOL_NAME3, address(0));
     }
 
-    function testProtocolStatusChangeForNonExistentProtocol() public {
-        uint256 nonExistentProtocolId = 999;
-
-        vm.prank(OWNER);
-        vm.expectRevert(DropnestStaking_ProtocolDoesNotExist.selector);
-        stakingContract.setProtocolStatus(nonExistentProtocolId, false);
-    }
 
     function testRemovingNonSupportedToken() public {
         address notSupportedToken = makeAddr("notSupportedToken");
@@ -465,6 +564,21 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
     function testSetProtocolStatusFailsWhenStatusUnchanged() public {
         uint256 protocolId = getProtocolId(PROTOCOL_NAME1);
 
+        vm.prank(OWNER);
+        vm.expectRevert(abi.encodeWithSelector(DropnestStaking_CannotChangeProtocolStatus.selector, protocolId, true));
+        stakingContract.setProtocolStatus(protocolId, true);
+    }
+
+    function testSetProtocolStatusFailsWhenProtocolDoesNotExist() public {
+        uint256 nonExistentProtocolId = 999;
+
+        vm.prank(OWNER);
+        vm.expectRevert(DropnestStaking_ProtocolDoesNotExist.selector);
+        stakingContract.setProtocolStatus(nonExistentProtocolId, false);
+    }
+
+    function testChangeProtocolStatusToSameValue() public {
+        uint256 protocolId = 1;
         vm.prank(OWNER);
         vm.expectRevert(abi.encodeWithSelector(DropnestStaking_CannotChangeProtocolStatus.selector, protocolId, true));
         stakingContract.setProtocolStatus(protocolId, true);
@@ -523,6 +637,14 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         vm.prank(OWNER);
         vm.expectRevert(abi.encodeWithSelector(DropnestStaking_TokenAlreadySupported.selector, token));
         stakingContract.addSupportedToken(token);
+    }
+
+    function testAddingZeroAddressToken() public {
+        address zeroToken = address(0);
+
+        vm.prank(OWNER);
+        vm.expectRevert(DropnestStaking_ZeroAddressProvided.selector);
+        stakingContract.addSupportedToken(zeroToken);
     }
 
     function testProtocolStatusChangeForInactiveProtocol() public {
