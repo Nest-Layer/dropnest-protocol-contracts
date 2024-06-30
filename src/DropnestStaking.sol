@@ -6,10 +6,11 @@ import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /// @title DropnestStaking
 /// @notice This contract is used for managing deposits to the Dropnest protocol.
-contract DropnestStaking is Ownable, Pausable, ReentrancyGuard {
+contract DropnestStaking is Ownable2Step, Pausable, ReentrancyGuard {
 
     ///////////////////
     // Libraries     //
