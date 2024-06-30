@@ -380,6 +380,8 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         address newToken = makeAddr("newToken");
 
         vm.prank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit SupportedTokenAdded(newToken);
         stakingContract.addSupportedToken(newToken);
 
         address[] memory supportedTokens = stakingContract.getSupportedTokens();
@@ -397,6 +399,8 @@ contract DropnestStakingTest is StdCheats, Test, Events, Errors {
         address token = depositTokens[0];
 
         vm.prank(OWNER);
+        vm.expectEmit(true, true, true, true);
+        emit SupportedTokenRemoved(token);
         stakingContract.removeSupportedToken(token);
 
         address[] memory supportedTokens = stakingContract.getSupportedTokens();
