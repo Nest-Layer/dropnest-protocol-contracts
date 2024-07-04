@@ -6,4 +6,6 @@ contract Events {
     event ProtocolAdded(uint256 protocolId, string protocolName, address to);
     event ProtocolUpdated(uint256 protocolId, string protocolName, address to);
     event ProtocolStatusUpdated(uint256 protocolId, bool status);
+    event SupportedTokenAdded(address token);
+    event SupportedTokenRemoved(address token);
 }
